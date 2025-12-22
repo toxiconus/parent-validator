@@ -1,0 +1,16 @@
+{
+    "python.analysis.typeCheckingMode": "strict",
+    "workbench.iconTheme": "material-icon-theme",
+    "material-icon-theme.files.associations": {
+        "*.py": "python",
+        "backend.py": "python-misc",
+        "parser_v2.py": "python-misc",
+        "*.js": "javascript",
+        "parent-validator.js": "javascript-map"
+    },
+    "material-icon-theme.folders.associations": {
+        "backups": "archive",
+        "uploads": "upload",
+        "__pycache__": "temp"
+    }
+}

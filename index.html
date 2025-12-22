@@ -46,7 +46,7 @@
                 </div>
                 
                 <div class="paste-buttons">
-                    <button class="btn btn-info" onclick="parseAndLoadPastedData()">
+                    <button id="parseButton" class="btn btn-info">
                         <span class="material-icons">check_circle</span> Wczytaj dane z pola
                     </button>
                     <button class="btn btn-outline" onclick="clearPasteArea()">
@@ -163,10 +163,10 @@
                     </div>
                 </div>
                 <div class="action-group" id="actionGroup" style="display: none;">
-                    <button class="btn btn-small btn-primary" id="exportBtn" onclick="exportData()">
+                    <button class="btn btn-small btn-primary" id="exportBtn">
                         <span class="material-icons">download</span> Eksportuj TSV
                     </button>
-                    <button class="btn btn-small btn-secondary" id="saveBtn" onclick="saveToLocalStorage()">
+                    <button class="btn btn-small btn-secondary" id="saveBtn">
                         <span class="material-icons">save</span> Zapisz w przeglądarce
                     </button>
                     <button class="btn btn-small btn-outline" onclick="clearAllData()">
@@ -214,6 +214,6 @@
     </div>
 
     <!-- Główny skrypt -->
-    <script src="parent-validator.js?v=20251222-9"></script>
+    <script src="parent-validator.js?v=20251222-13"></script>
 </body>
 </html>

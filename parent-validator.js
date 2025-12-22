@@ -33,15 +33,15 @@ function toggleTableControls() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Inicjalizacja edytora...');
     loadNameDatabase();
-    checkBackendStatus();
-    
-    // Załaduj modal PRZED setupem event listeners
-    loadEditModal().then(() => {
-        setupEventListeners();
-        console.log('✅ Inicjalizacja zakończona pomyślnie');
-        
-        // Auto-ładowanie pliku Ur Blin ORG.txt
-        autoLoadDefaultFile();
+    checkBackendStatus().then(() => {
+        // Załaduj modal PRZED setupem event listeners
+        loadEditModal().then(() => {
+            setupEventListeners();
+            console.log('✅ Inicjalizacja zakończona pomyślnie');
+            
+            // Auto-ładowanie pliku Ur Blin ORG.txt
+            autoLoadDefaultFile();
+        });
     });
     
     // Sprawdź czy są zapisane dane w localStorage
@@ -68,8 +68,13 @@ function autoLoadDefaultFile() {
             return response.text();
         })
         .then(text => {
-            console.log('✅ Auto-załadowano Ur Blin ORG.txt');
-            parseDataWithFormatDetection(text, '\t');
+            console.log('Auto-załadowano Ur Blin ORG.txt do textarea');
+            const textarea = document.getElementById('pasteTextarea');
+            if (textarea) {
+                textarea.value = text;
+                detectAndHintFormat(text);
+                updateInputPreview(text);
+            }
         })
         .catch(err => {
             console.log('⚠️ Brak pliku Ur Blin ORG.txt - użyj Ctrl+V aby wkleić dane');
@@ -237,6 +242,9 @@ function setupEventListeners() {
     const filterGray = document.getElementById('filterGray');
     const editForm = document.getElementById('editForm');
     const pasteTextarea = document.getElementById('pasteTextarea');
+    const parseButton = document.getElementById('parseButton');
+    const exportBtn = document.getElementById('exportBtn');
+    const saveBtn = document.getElementById('saveBtn');
 
     if (!filterRed || !filterGreen || !filterGray) {
         console.error('Błąd inicjalizacji: Brakuje głównych elementów HTML (filtry)!');
@@ -249,6 +257,21 @@ function setupEventListeners() {
     
     if (!pasteTextarea) {
         console.error('Błąd inicjalizacji: Brakuje pasteTextarea!');
+        return;
+    }
+
+    if (!parseButton) {
+        console.error('Błąd inicjalizacji: Brakuje parseButton!');
+        return;
+    }
+
+    if (!exportBtn) {
+        console.error('Błąd inicjalizacji: Brakuje exportBtn!');
+        return;
+    }
+
+    if (!saveBtn) {
+        console.error('Błąd inicjalizacji: Brakuje saveBtn!');
         return;
     }
 
@@ -275,9 +298,25 @@ function setupEventListeners() {
         }
     });
 
-    filterRed.addEventListener('change', updateTableDisplay);
-    filterGreen.addEventListener('change', updateTableDisplay);
-    filterGray.addEventListener('change', updateTableDisplay);
+    filterRed.addEventListener('change', () => generateTableWithBackend());
+    filterGreen.addEventListener('change', () => generateTableWithBackend());
+    filterGray.addEventListener('change', () => generateTableWithBackend());
+    
+    // Przycisk parsowania danych
+    parseButton.addEventListener('click', () => {
+        const text = document.getElementById('pasteTextarea').value.trim();
+        if (text) {
+            parseDataWithFormatDetection(text);
+        } else {
+            showNotification('Brak danych do parsowania', 'warning');
+        }
+    });
+    
+    // Przycisk eksportu danych
+    exportBtn.addEventListener('click', () => exportData());
+    
+    // Przycisk zapisywania danych
+    saveBtn.addEventListener('click', () => saveToLocalStorage());
     
     // editForm musi być podpięty PO załadowaniu modala
     if (editForm) {
@@ -305,11 +344,36 @@ function setupEventListeners() {
     fieldsToValidate.forEach(fieldId => {
         const field = document.getElementById(fieldId);
         if (field) {
-            field.addEventListener('input', updateLiveValidation);
+            field.addEventListener('input', () => {
+                // Prosta walidacja na żywo - podświetlanie zielone/czerwone
+                const value = field.value.trim();
+                if (value.length > 0) {
+                    const isValid = validateFieldValue(fieldId, value);
+                    field.style.borderColor = isValid ? '#28a745' : '#dc3545';
+                } else {
+                    field.style.borderColor = '#ddd';
+                }
+            });
         }
     });
 
     console.log('Event listeners zainstalowane pomyślnie');
+}
+
+// ==================== WALIDACJA POLA NA ŻYWO ====================
+function validateFieldValue(fieldId, value) {
+    if (!value || value.length < 2) return false;
+    
+    const lowerValue = value.toLowerCase();
+    
+    // Sprawdź odpowiednie bazy danych w zależności od pola
+    if (fieldId.includes('Name')) {
+        return allNames.has(lowerValue) || allSurnames.has(lowerValue);
+    } else if (fieldId.includes('Surname')) {
+        return allSurnames.has(lowerValue);
+    }
+    
+    return false;
 }
 
 // ==================== PODGLĄD DANYCH WEJŚCIOWYCH ====================
@@ -485,6 +549,9 @@ async function parseAndLoadPastedData() {
         }
         
         console.log('Wyświetlam dane... allData.length =', allData.length);
+        if (allData.length > 0) {
+            console.log('Przykładowy rekord:', allData[0]);
+        }
         displayData();
         showNotification(`Załadowano ${allData.length} rekordów`, 'success');
         
@@ -652,16 +719,19 @@ async function parseDataWithFormatDetection(content, separator = '\t') {
                 console.log('✅ Parsowanie przez Python backend', result.records.length, 'rekordów');
                 allData = result.records.map(r => ({
                     id: r.record_id || '',
-                    surname: r.parent_data?.father_surname || '',
-                    name: r.parent_data?.father_name || '',
-                    year: '',
+                    surname: r.parent_data?.surname || r.parent_data?.father_surname || '',
+                    name: r.parent_data?.name || r.parent_data?.father_name || '',
+                    year: r.parent_data?.year || '',
+                    number: r.parent_data?.number || '',
                     place: r.parent_data?.origin_place || '',
                     fatherName: r.parent_data?.father_name || '',
                     fatherSurname: r.parent_data?.father_surname || '',
+                    fatherAge: r.parent_data?.father_age || '',
                     motherName: r.parent_data?.mother_name || '',
                     motherSurname: r.parent_data?.mother_surname || '',
+                    motherAge: r.parent_data?.mother_age || '',
                     motherMaidenName: r.parent_data?.mother_surname || '',
-                    notes: r.warnings?.join('; ') || '',
+                    notes: r.parent_data?.notes || r.warnings?.join('; ') || '',
                     original: r.original_text || '',
                     fatherNameValidated: r.validation?.father_name_valid || false,
                     fatherSurnameValidated: r.validation?.father_surname_valid || false,
@@ -669,6 +739,8 @@ async function parseDataWithFormatDetection(content, separator = '\t') {
                     motherSurnameValidated: r.validation?.mother_surname_valid || false,
                     motherMaidenNameValidated: r.validation?.mother_surname_valid || false
                 }));
+                console.log('✅ Dane sparsowane przez backend, wywołuję displayData()');
+                displayData();
                 return;
             }
         }
@@ -711,10 +783,10 @@ function parseDataLocalFallback(content, separator = '\t') {
     
     console.log('parseDataLocalFallback: hasIDs=', hasIDs, 'dataLines.length=', dataLines.length);
     
-    // Jeśli brakuje ID, pokaż modal - ALE teraz parsuj domyślnie
+    // Jeśli brakuje ID, parsuj z autogenerowaniem ID
     if (!hasIDs && dataLines.length > 0) {
         console.log('Brak ID w kolumnie 0 - autogenerujemy');
-        selectIdColumn(-1, separator, dataLines);
+        parseDataWithIds(dataLines, separator, -1);
         return;
     }
     
@@ -722,7 +794,21 @@ function parseDataLocalFallback(content, separator = '\t') {
     parseDataWithBackend(dataLines, separator);
 }
 
-// ==================== SPRAWDZENIE BACKENDU ====================
+// ==================== STATYSTYKI Z BACKENDU ====================
+function updateStatsFromBackend(backendStats) {
+    document.getElementById('recordCount').textContent = backendStats.total;
+    document.getElementById('confirmedCount').textContent = backendStats.confirmed;
+    document.getElementById('warningCount').textContent = backendStats.warning;
+    document.getElementById('progressPercent').textContent = `${backendStats.progress}%`;
+    
+    // Ustaw progress bar jeśli istnieje
+    const progressBar = document.getElementById('progressBar');
+    if (progressBar) {
+        progressBar.style.width = `${backendStats.progress}%`;
+    }
+}
+
+// ==================== SPRAWDZANIE BACKENDU ====================
 async function checkBackendStatus() {
     try {
         const response = await fetch('http://127.0.0.1:5000/api/health');
@@ -740,8 +826,100 @@ async function checkBackendStatus() {
     return false;
 }
 
-// ==================== ŁADOWANIE DANYCH Z BACKENDU ====================
-async function parseDataWithBackend(dataLines, separator = '\t') {
+// ==================== WALIDACJA PRZEZ BACKEND ====================
+async function validateWithBackend(records) {
+    try {
+        const response = await fetch('http://127.0.0.1:5000/api/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ records: records })
+        });
+        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error);
+        
+        // Aktualizuj globalne dane
+        allData = result.records;
+        
+        // Aktualizuj statystyki
+        updateStatsFromBackend(result.stats);
+        
+        return result.records;
+    } catch (error) {
+        console.error('Błąd walidacji przez backend:', error);
+        // Fallback: lokalna walidacja
+        return validateRecordsLocal(records);
+    }
+}
+
+// ==================== GENEROWANIE TABELI PRZEZ BACKEND ====================
+async function generateTableWithBackend() {
+    console.log('generateTableWithBackend: Rozpoczynam generowanie tabeli, allData.length =', allData.length);
+    
+    try {
+        const filters = {
+            red: document.getElementById('filterRed').checked,
+            green: document.getElementById('filterGreen').checked,
+            gray: document.getElementById('filterGray').checked
+        };
+        
+        console.log('generateTableWithBackend: Wysyłam do backend, filters =', filters);
+        
+        const response = await fetch('http://127.0.0.1:5000/api/table', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                records: allData,
+                filters: filters
+            })
+        });
+        
+        console.log('generateTableWithBackend: Odpowiedź backend, status =', response.status);
+        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const result = await response.json();
+        console.log('generateTableWithBackend: Odpowiedź JSON =', result);
+        
+        if (!result.success) throw new Error(result.error);
+        
+        // Wstaw HTML tabeli
+        const tbody = document.getElementById('tableBody');
+        console.log('generateTableWithBackend: tbody element =', tbody);
+        
+        if (tbody) {
+            tbody.innerHTML = result.html;
+            console.log('generateTableWithBackend: Wstawiono HTML, długość =', result.html.length);
+        } else {
+            console.error('generateTableWithBackend: Nie znaleziono elementu tableBody!');
+        }
+        
+        // Aktualizuj liczniki
+        const filteredCount = document.getElementById('filteredCount');
+        const totalCount = document.getElementById('totalCount');
+        
+        if (filteredCount) filteredCount.textContent = result.filtered_count;
+        if (totalCount) totalCount.textContent = result.total_count;
+        
+        console.log('generateTableWithBackend: Zaktualizowano liczniki, filtered =', result.filtered_count, 'total =', result.total_count);
+        
+        return result;
+    } catch (error) {
+        console.error('Błąd generowania tabeli przez backend:', error);
+        // Fallback: lokalne generowanie - ale unikaj rekursji
+        console.log('generateTableWithBackend: Próba lokalnego generowania tabeli');
+        try {
+            updateTableDisplay();
+        } catch (localError) {
+            console.error('Błąd lokalnego generowania tabeli:', localError);
+        }
+    }
+}
+
+// ==================== PARSOWANIE PRZEZ BACKEND ====================
+async function parseDataWithBackend(dataLines, separator) {
     try {
         showNotification('Wysyłanie danych do backendu...', 'info');
         
@@ -782,16 +960,23 @@ async function parseDataWithBackend(dataLines, separator = '\t') {
             motherAge: r.parent_data.mother_age || '',
             notes: r.parent_data.notes || '',
             original: r.parent_data.original || '',
-            fatherNameValidated: r.validation?.father_name_valid || false,
-            fatherSurnameValidated: r.validation?.father_surname_valid || false,
-            motherNameValidated: r.validation?.mother_name_valid || false,
-            motherSurnameValidated: r.validation?.mother_surname_valid || false,
-            motherMaidenNameValidated: r.validation?.mother_surname_valid || false
+            fatherNameValidated: false, // zostanie ustawione przez walidację
+            fatherSurnameValidated: false,
+            motherNameValidated: false,
+            motherSurnameValidated: false,
+            motherMaidenNameValidated: false
         }));
         
-        // Aktualizuj statystyki
-        updateStats();
-        updateTableDisplay();
+        // Walidacja przez backend
+        await validateWithBackend(allData);
+        
+        // Aktualizuj statystyki z parsowania
+        if (result.stats) {
+            updateStatsFromBackend(result.stats);
+        }
+        
+        // Generuj tabelę przez backend
+        await generateTableWithBackend();
         
         showNotification(`Załadowano ${allData.length} rekordów z backendu`, 'success');
         
@@ -1039,6 +1224,7 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
     });
     
     console.log('parseDataWithIds finished: allData.length =', allData.length);
+    displayData();
 }
 // ==================== PARSER TEKSTU GENEALOGICZNEGO ====================
 function parseGenealogicalData(text) {
@@ -1197,7 +1383,7 @@ function displayData() {
     if (bottomPanel) bottomPanel.style.display = 'block';
     
     updateStats();
-    updateTableDisplay();
+    generateTableWithBackend();
     
     // Pokaż pierwszy wiersz w okienku
     if (allData.length > 0) {
@@ -1593,7 +1779,7 @@ function handleFormSubmit(e) {
     currentEditingRecord.notes = document.getElementById('editNotes').value.trim();
 
     validateRecord(currentEditingRecord);
-    updateTableDisplay();
+    generateTableWithBackend();
     updateStats();
     closeEditModal();
     

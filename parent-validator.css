@@ -2748,3 +2748,57 @@ textarea.drop-target-active {
         width: 100%;
     }
 }
+
+/* ==================== KOLORY STATUSU WIERSZY I KOMÓREK ==================== */
+.row-warning {
+    background-color: #fff5f5 !important;
+}
+
+.row-validated {
+    background-color: #f0fff4 !important;
+}
+
+.row-empty {
+    background-color: #f7fafc !important;
+}
+
+.cell-valid {
+    background: rgba(76, 175, 80, 0.2) !important;
+    color: #a5d6a7 !important;
+    border-left: 3px solid #4caf50;
+}
+
+.cell-invalid {
+    background: rgba(244, 67, 54, 0.2) !important;
+    color: #ef9a9a !important;
+    border-left: 3px solid #f44336;
+}
+
+/* Walidacja (zielony) */
+.text-validated {
+    background: rgba(76, 175, 80, 0.2) !important;
+    color: #a5d6a7 !important;
+}
+
+/* Nie znaleziono (czerwony) */
+.cell-not-found {
+    background: rgba(244, 67, 54, 0.2) !important;
+    color: #ef9a9a !important;
+}
+
+/* Puste pole (szary) */
+.text-empty {
+    background: rgba(158, 158, 158, 0.1) !important;
+    color: #bdbdbd !important;
+}
+
+/* Edytowalne komórki */
+.cell-editable {
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.cell-editable:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    outline: 1px solid #4fc3f7;
+}

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prosty Ekstraktor Danych</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background: #f8f9fa;
+        }
+        .stats {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Prosty Ekstraktor Danych</h1>
+
+        <div class="stats" id="stats">
+            Status: Gotowy do wklejenia danych
+        </div>
+
+        <h3>Wklej dane (TAB-separated):</h3>
+        <textarea id="dataInput" placeholder="Wklej dane tutaj (Ctrl+V)..."></textarea>
+
+        <div>
+            <button onclick="parseData()">Przetwórz dane</button>
+            <button onclick="clearData()">Wyczyść</button>
+        </div>
+
+        <h3>Wyniki:</h3>
+        <div id="results">
+            <p>Brak danych do wyświetlenia</p>
+        </div>
+    </div>
+
+    <script>
+        let parsedData = [];
+
+        function parseData() {
+            const input = document.getElementById('dataInput').value;
+            const lines = input.split('\n').filter(line => line.trim());
+
+            if (lines.length === 0) {
+                alert('Brak danych do przetworzenia');
+                return;
+            }
+
+            parsedData = lines.map((line, index) => {
+                const fields = line.split('\t');
+                return {
+                    id: index + 1,
+                    year: fields[0] || '',
+                    number: fields[1] || '',
+                    surname: fields[2] || '',
+                    name: fields[3] || '',
+                    place: fields[4] || '',
+                    fatherName: fields[5] || '',
+                    fatherSurname: fields[6] || '',
+                    motherName: fields[7] || '',
+                    motherSurname: fields[8] || ''
+                };
+            });
+
+            updateStats();
+            displayResults();
+        }
+
+        function clearData() {
+            document.getElementById('dataInput').value = '';
+            parsedData = [];
+            updateStats();
+            document.getElementById('results').innerHTML = '<p>Brak danych do wyświetlenia</p>';
+        }
+
+        function updateStats() {
+            const stats = document.getElementById('stats');
+            if (parsedData.length === 0) {
+                stats.textContent = 'Status: Gotowy do wklejenia danych';
+            } else {
+                stats.textContent = `Status: Przetworzono ${parsedData.length} rekordów`;
+            }
+        }
+
+        function displayResults() {
+            if (parsedData.length === 0) {
+                document.getElementById('results').innerHTML = '<p>Brak danych do wyświetlenia</p>';
+                return;
+            }
+
+            let html = '<table>';
+            html += '<thead><tr>';
+            html += '<th>ID</th><th>Rok</th><th>Numer</th><th>Nazwisko</th><th>Imię</th>';
+            html += '<th>Miejsce</th><th>Ojciec</th><th>Nazwisko ojca</th><th>Matka</th><th>Nazwisko matki</th>';
+            html += '</tr></thead><tbody>';
+
+            parsedData.forEach(row => {
+                html += '<tr>';
+                html += `<td>${row.id}</td>`;
+                html += `<td>${row.year}</td>`;
+                html += `<td>${row.number}</td>`;
+                html += `<td>${row.surname}</td>`;
+                html += `<td>${row.name}</td>`;
+                html += `<td>${row.place}</td>`;
+                html += `<td>${row.fatherName}</td>`;
+                html += `<td>${row.fatherSurname}</td>`;
+                html += `<td>${row.motherName}</td>`;
+                html += `<td>${row.motherSurname}</td>`;
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            document.getElementById('results').innerHTML = html;
+        }
+
+        // Obsługa wklejania
+        document.getElementById('dataInput').addEventListener('paste', function(e) {
+            setTimeout(() => {
+                const input = e.target.value;
+                if (input.trim()) {
+                    document.getElementById('stats').textContent = 'Status: Dane wklejone - kliknij "Przetwórz dane"';
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>

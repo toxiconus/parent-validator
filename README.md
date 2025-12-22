@@ -42,7 +42,12 @@ Frontend (HTML/JS) ←→ Backend (Python Flask)
 **Backend Python:**
 - Parser `parser_v2.py` obsługuje 5 formatów danych
 - Walidacja z bazami: 315 imion + 283 nazwisk
-- API REST: `/api/parse`, `/api/export`, `/api/health`
+- API REST: 
+  - `/api/health` - status serwera
+  - `/api/parse` - parsowanie danych
+  - `/api/validate` - walidacja rekordów
+  - `/api/table` - generowanie HTML tabeli
+  - `/api/export/tsv` - eksport danych
 
 ---
 
