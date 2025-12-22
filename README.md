@@ -6,21 +6,43 @@
 
 ## ⚡ 3 Kroki Do Uruchomienia
 
-### 1. Uruchom Backend (opcjonalnie)
+### 1. Uruchom Wszystko Razem
 ```bash
-.\start-backend.bat
-# Backend: http://localhost:5000
+.\start-all-local.bat
+# Frontend: http://localhost:8080/modules/data-entry/parent-validator/index.html
+# Backend:  http://localhost:5000/api/health
 ```
 
-### 2. Otwórz UI
-```
-file:///J:/A.Gene/modules/data-entry/parent-validator/index.html
+### 2. Lub Osobno
+```bash
+# Backend (Python Flask)
+.\start-backend.bat
+
+# Frontend (statyczny HTML)
+# Otwórz index.html w przeglądarce
 ```
 
 ### 3. Załaduj Dane
-- **Excel**: `Ctrl+C` → `Ctrl+V` → "Wczytaj dane"
-- **Plik**: "Załaduj plik" → wybierz `.tsv`/`.csv`
-- **Test**: "Załaduj z parsera" (5947 rekordów)
+- **Excel**: `Ctrl+C` → `Ctrl+V` → "Wczytaj dane z pola"
+- **Plik**: Przeciągnij lub wybierz `.tsv`/`.csv`/`.txt`
+- **Test**: "Załaduj z parsera" (5947 rekordów z akt chrztów)
+
+---
+
+## 🏗️ Architektura
+
+```
+Frontend (HTML/JS) ←→ Backend (Python Flask)
+       ↓                    ↓
+   Walidacja JS        Parser Python + AI
+   Tabela edycji       Baza imion/nazwisk
+   Export TSV          Eksport JSON/TSV
+```
+
+**Backend Python:**
+- Parser `parser_v2.py` obsługuje 5 formatów danych
+- Walidacja z bazami: 315 imion + 283 nazwisk
+- API REST: `/api/parse`, `/api/export`, `/api/health`
 
 ---
 
@@ -28,15 +50,15 @@ file:///J:/A.Gene/modules/data-entry/parent-validator/index.html
 
 ```
 WEJŚCIE:
-Excel z danymi:
-  ID | Nazwisko | Imię | Rok | Ojciec | Matka
+Excel z danymi rodziców z akt chrztów
   
 PRZETWORZENIE:
-  → Parsowanie + walidacja z bazą 315 imion + 283 nazwisk
+  → Inteligentne parsowanie (backend Python)
+  → Walidacja imion/nazwisk z bazami danych
   → Kolorowanie: 🟢 OK / 🔴 Do sprawdzenia / ⚪ Brakujące
   
 WYJŚCIE:
-  → Edytowalna tabela + export TSV
+  → Edytowalna tabela + export TSV/JSON
 ```
 
 ---

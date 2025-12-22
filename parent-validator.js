@@ -33,6 +33,7 @@ function toggleTableControls() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Inicjalizacja edytora...');
     loadNameDatabase();
+    checkBackendStatus();
     
     // Załaduj modal PRZED setupem event listeners
     loadEditModal().then(() => {
@@ -718,7 +719,95 @@ function parseDataLocalFallback(content, separator = '\t') {
     }
     
     // Jeśli mamy ID, parsuj normalnie
-    parseDataWithIds(dataLines, separator, -1);
+    parseDataWithBackend(dataLines, separator);
+}
+
+// ==================== SPRAWDZENIE BACKENDU ====================
+async function checkBackendStatus() {
+    try {
+        const response = await fetch('http://127.0.0.1:5000/api/health');
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Backend dostępny:', data);
+            showNotification('Backend Python połączony', 'success');
+            return true;
+        }
+    } catch (error) {
+        console.warn('Backend niedostępny:', error);
+        showNotification('Backend Python niedostępny - używam parsowania lokalnego', 'warning');
+        return false;
+    }
+    return false;
+}
+
+// ==================== ŁADOWANIE DANYCH Z BACKENDU ====================
+async function parseDataWithBackend(dataLines, separator = '\t') {
+    try {
+        showNotification('Wysyłanie danych do backendu...', 'info');
+        
+        const response = await fetch('http://127.0.0.1:5000/api/parse', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                data: dataLines.join('\n'),
+                delimiter: separator
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Błąd parsowania');
+        }
+        
+        // Konwertuj wyniki backendu na format aplikacji
+        allData = result.records.map(r => ({
+            id: r.record_id,
+            year: r.parent_data.year || '',
+            number: r.parent_data.number || '',
+            surname: r.parent_data.surname || '',
+            name: r.parent_data.name || '',
+            place: r.parent_data.place || '',
+            fatherName: r.parent_data.father_name || '',
+            fatherSurname: r.parent_data.father_surname || '',
+            fatherAge: r.parent_data.father_age || '',
+            motherName: r.parent_data.mother_name || '',
+            motherSurname: r.parent_data.mother_surname || '',
+            motherAge: r.parent_data.mother_age || '',
+            notes: r.parent_data.notes || '',
+            original: r.parent_data.original || '',
+            fatherNameValidated: r.validation?.father_name_valid || false,
+            fatherSurnameValidated: r.validation?.father_surname_valid || false,
+            motherNameValidated: r.validation?.mother_name_valid || false,
+            motherSurnameValidated: r.validation?.mother_surname_valid || false,
+            motherMaidenNameValidated: r.validation?.mother_surname_valid || false
+        }));
+        
+        // Aktualizuj statystyki
+        updateStats();
+        updateTableDisplay();
+        
+        showNotification(`Załadowano ${allData.length} rekordów z backendu`, 'success');
+        
+        // Pokaż podsumowanie
+        if (result.stats) {
+            console.log('Statystyki parsowania:', result.stats);
+        }
+        
+    } catch (error) {
+        console.error('Błąd parsowania przez backend:', error);
+        showNotification(`Błąd parsowania: ${error.message}`, 'error');
+        
+        // Fallback: użyj lokalnego parsowania jeśli backend niedostępny
+        console.log('Próbuję lokalne parsowanie...');
+        parseDataWithIds(dataLines, separator);
+    }
 }
 
 function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
@@ -1518,6 +1607,64 @@ function exportData() {
         return;
     }
 
+    showNotification('Eksportowanie przez backend...', 'info');
+
+    // Przygotuj dane w formacie oczekiwanym przez backend
+    const records = allData.map(r => ({
+        record_id: r.id,
+        year: r.year,
+        number: r.number,
+        surname: r.surname,
+        name: r.name,
+        place: r.place,
+        father_name: r.fatherName,
+        father_surname: r.fatherSurname,
+        father_age: r.fatherAge,
+        mother_name: r.motherName,
+        mother_surname: r.motherSurname,
+        mother_age: r.motherAge,
+        notes: r.notes,
+        original: r.original
+    }));
+
+    fetch('http://127.0.0.1:5000/api/export/tsv', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            records: records
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+        return response.blob();
+    })
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `rodzice-${new Date().toISOString().slice(0,10)}.tsv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        showNotification(`Wyeksportowano ${allData.length} rekordów`, 'success');
+    })
+    .catch(error => {
+        console.error('Błąd eksportu przez backend:', error);
+        showNotification(`Błąd eksportu: ${error.message}`, 'error');
+        
+        // Fallback: lokalny eksport
+        console.log('Próbuję lokalny eksport...');
+        exportDataLocal();
+    });
+}
+
+function exportDataLocal() {
     const headers = ['ID', 'ROK', 'Nr', 'Nazwisko', 'Imię', 'Miejscowość', 'ImięO', 'NazwiskoO', 'wiekO', 'IM', 'NM', 'wM', 'uwagi', 'UWAGI ORG'];
     const rows = allData.map(r => [
         r.id,
@@ -1549,7 +1696,7 @@ function exportData() {
     a.click();
     document.body.removeChild(a);
     
-    showNotification(`Wyeksportowano ${allData.length} rekordów`, 'success');
+    showNotification(`Wyeksportowano ${allData.length} rekordów (lokalnie)`, 'success');
 }
 
 function saveToLocalStorage() {
