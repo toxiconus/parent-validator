@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+test_*.json
+parser_v2_results.json
+uploads/*
+!uploads/.gitkeep
+backups/*
+!backups/.gitkeep

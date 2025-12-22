@@ -1,0 +1,399 @@
+/* ==================== MODAL EDYCJI REKORDU ==================== */
+
+/* Overlay */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 9999999;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal-content {
+    background: #1e1e1e;
+    border-radius: 8px;
+    width: 95%;
+    max-width: 1400px;
+    max-height: 95vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-fullscreen {
+    width: 98vw !important;
+    max-width: none !important;
+    max-height: 98vh;
+    height: 98vh;
+}
+
+/* Modal header */
+.modal-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #1a1a1a;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #fff;
+    font-weight: 500;
+}
+
+.modal-header #modalRecordId {
+    color: #4fc3f7;
+    font-weight: 400;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #888;
+    padding: 0;
+    line-height: 1;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    transition: all 0.2s;
+}
+
+.close-btn:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.1);
+}
+
+/* Modal body */
+.modal-body {
+    padding: 12px 16px;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+/* ==================== ORIGINAL TEXT (STICKY) ==================== */
+
+.original-text-section {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 8px;
+    margin-bottom: 12px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #4fc3f7;
+    font-weight: 500;
+    margin-bottom: 6px;
+    font-size: 0.7em;
+}
+
+.section-header .material-icons {
+    font-size: 14px;
+}
+
+.original-text-display {
+    background: #0f0f0f;
+    border: 1px solid #2a2a2a;
+    border-radius: 3px;
+    padding: 6px;
+    color: #bbb;
+    font-family: 'Courier New', monospace;
+    font-size: 0.7em;
+    line-height: 1.3;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 60px;
+    overflow-y: auto;
+}
+
+/* ==================== TOP BAR (METADATA) ==================== */
+
+.top-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+    background: rgba(79, 195, 247, 0.03);
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid rgba(79, 195, 247, 0.1);
+}
+
+.field-group {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.top-bar-input {
+    padding: 8px 8px 18px 8px;
+    border: 1px solid #444;
+    border-radius: 3px;
+    background: #121212;
+    color: #f0f0f0;
+    font-size: 0.95em;
+    order: -1;
+}
+
+.top-bar-input:focus {
+    outline: none;
+    border-color: #4fc3f7;
+    box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.1);
+}
+
+.top-bar-input[readonly] {
+    background: #0a0a0a;
+    color: #888;
+    cursor: not-allowed;
+}
+
+.field-label {
+    font-size: 0.65em;
+    color: #888;
+    font-weight: 500;
+    padding: 2px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ==================== FIELD CONTAINERS ==================== */
+
+.field-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.field-input,
+.field-textarea {
+    padding: 10px 8px 20px 8px;
+    border: 1px solid #444;
+    border-radius: 3px;
+    background: #121212;
+    color: #f0f0f0;
+    font-size: 0.95em;
+    font-family: inherit;
+    order: -1;
+}
+
+.field-input:focus,
+.field-textarea:focus {
+    outline: none;
+    border-color: #4fc3f7;
+    box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.1);
+}
+
+/* Kolorowanie tekstu na podstawie walidacji */
+.field-input.text-valid {
+    color: #43e97b;
+}
+
+.field-input.text-invalid {
+    color: #f5576c;
+}
+
+/* Hint - fragment z oryginalnych danych */
+.hint-source {
+    font-size: 0.65em;
+    color: #888;
+    padding: 3px 0;
+    min-height: 16px;
+    font-family: 'Courier New', monospace;
+    background: rgba(79, 195, 247, 0.05);
+    padding: 2px 4px;
+    border-radius: 2px;
+    border-left: 2px solid rgba(79, 195, 247, 0.3);
+    margin-bottom: 3px;
+}
+
+.hint-source:empty {
+    display: none;
+}
+
+.field-label {
+    font-size: 0.65em;
+    color: #888;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ==================== SECTIONS ==================== */
+
+.section-compact {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.child-section {
+    border-left: 3px solid #4fc3f7;
+}
+
+.row-compact {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.row-compact:last-child {
+    margin-bottom: 0;
+}
+
+/* ==================== PARENTS SECTION ==================== */
+
+.parents-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.parent-section {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 10px;
+}
+
+.father-section {
+    border-left: 3px solid #ff9800;
+    background: rgba(255, 152, 0, 0.02);
+}
+
+.mother-section {
+    border-left: 3px solid #e91e63;
+    background: rgba(233, 30, 99, 0.02);
+}
+
+.parent-section .row-compact {
+    margin-bottom: 6px;
+}
+
+.parent-section .row-compact:last-child {
+    margin-bottom: 0;
+}
+
+/* ==================== NOTES SECTION ==================== */
+
+.section-notes {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 12px;
+}
+
+.section-notes .field-container {
+    margin-bottom: 8px;
+}
+
+.section-notes .field-container:last-child {
+    margin-bottom: 0;
+}
+
+.field-textarea {
+    resize: vertical;
+    min-height: 30px;
+}
+
+.full-width {
+    grid-column: 1 / -1;
+}
+
+/* ==================== FORM ACTIONS ==================== */
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding-top: 12px;
+    border-top: 1px solid #333;
+    margin-top: 12px;
+}
+
+.btn {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 3px;
+    font-size: 0.9em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.btn .material-icons {
+    font-size: 18px;
+}
+
+.btn-primary {
+    background: #4fc3f7;
+    color: #000;
+    font-weight: 500;
+}
+
+.btn-primary:hover {
+    background: #29b6f6;
+}
+
+.btn-secondary {
+    background: #444;
+    color: #fff;
+}
+
+.btn-secondary:hover {
+    background: #555;
+}
+
+/* ==================== RESPONSIVE ==================== */
+
+@media (max-width: 1024px) {
+    .parents-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .top-bar {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .modal-content {
+        width: 100%;
+        max-height: 98vh;
+    }
+    
+    .top-bar {
+        grid-template-columns: 1fr;
+    }
+    
+    .row-compact {
+        grid-template-columns: 1fr;
+    }
+}

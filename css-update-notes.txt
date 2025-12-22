@@ -1,0 +1,9 @@
+Zapisano nowy CSS dla full screen modala.
+
+Główne zmiany:
+- Modal fullscreen: 98vw x 98vh
+- Górny pasek: 4 kolumny (ROK, Miejscowość, Nr, ID)
+- Rodzice obok siebie: 2 kolumny grid
+- Kompaktowe marginsy i paddgingi
+- Sticky original text
+- Tooltips będą widoczne na hover (title attribute)

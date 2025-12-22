@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ekstraktor Danych - A.Gene</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="parent-validator.css?v=20251222-5">
+    <link rel="stylesheet" href="edit-modal.css">
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="../../../index.html"><span class="material-icons">home</span> A.Gene</a>
+        <span>/</span>
+        <a href="../../../index.html">Moduły</a>
+        <span>/</span>
+        <span>Ekstraktor Danych</span>
+    </nav>
+
+    <div class="container">
+        <!-- Panel kontrolny -->
+        <div class="control-panel">
+            <!-- Textarea do wklejania danych -->
+            <div class="paste-section" id="pasteSection">
+                <label for="pasteTextarea" class="section-label">
+                    <span class="material-icons">content_paste</span> Wklej lub przeciągnij dane tutaj:
+                </label>
+                <div class="parse-info" id="parseInfo" style="display: none;">
+                    Wykryto <strong id="detectedRows">0</strong> wierszy w formacie <strong id="detectedFormat">TAB</strong>
+                </div>
+                <textarea id="pasteTextarea" class="paste-textarea" 
+                    placeholder="Wklej dane (Ctrl+V) lub przeciągnij plik tutaj...&#10;&#10;Obsługiwane formaty:&#10;- TAB-separated (Excel/Calc)&#10;- CSV (przecinkami)&#10;- Pliki .txt, .tsv, .csv&#10;&#10;Skróty: Ctrl+V (wklej) | Ctrl+O (otwórz plik)"></textarea>
+                
+                <!-- Podgląd sparsowanych danych wejściowych -->
+                <div class="input-preview" id="inputPreview" style="display: none;">
+                    <div class="preview-header">
+                        <span class="material-icons">visibility</span>
+                        <span>Podgląd danych (<span id="previewRowCount">0</span> wierszy, <span id="previewColCount">0</span> kolumn)</span>
+                    </div>
+                    <div class="preview-table-wrapper">
+                        <table class="preview-table" id="previewTable">
+                            <thead id="previewTableHead"></thead>
+                            <tbody id="previewTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="paste-buttons">
+                    <button class="btn btn-info" onclick="parseAndLoadPastedData()">
+                        <span class="material-icons">check_circle</span> Wczytaj dane z pola
+                    </button>
+                    <button class="btn btn-outline" onclick="clearPasteArea()">
+                        <span class="material-icons">clear</span> Wyczyść
+                    </button>
+                    <button class="btn btn-small" onclick="showFormatHelp()">
+                        <span class="material-icons">help</span> Pomoc
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela edycji -->
+        <div class="table-wrapper" id="tableWrapper">
+            <!-- Okienko z oryginalną linią -->
+            <div class="original-line-display" id="originalLineDisplay" style="display: none;">
+                <div class="line-content" id="originalLineContent"></div>
+            </div>
+            
+            <div class="table-header-actions">
+                <button class="btn btn-small" onclick="togglePanels()" title="Ukryj/pokaż panele">
+                    <span class="material-icons" id="togglePanelsIcon">unfold_less</span>
+                </button>
+            </div>
+
+            <table class="data-table" id="dataTable">
+                <thead>
+                    <tr>
+                        <th class="col-id sticky-col">ID</th>
+                        <th class="col-year">ROK</th>
+                        <th class="col-number">Nr.</th>
+                        <th class="col-surname">Nazwisko</th>
+                        <th class="col-name">Imię</th>
+                        <th class="col-place">Miejscowość</th>
+                        <th class="col-father">ImięO</th>
+                        <th class="col-father-surname">NazwiskoO</th>
+                        <th class="col-father-age">wiekO</th>
+                        <th class="col-mother">IM</th>
+                        <th class="col-mother-surname">NM</th>
+                        <th class="col-mother-age">wM</th>
+                        <th class="col-notes">uwagi</th>
+                        <th class="col-original">UWAGI ORG</th>
+                        <th class="col-actions">Akcje</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Wpisywane dynamicznie -->
+                </tbody>
+            </table>
+            
+            <div class="table-footer">
+                <div id="tableSummary">
+                    Kliknij na komórkę w kolumnach ojca/matki aby edytować
+                </div>
+            </div>
+        </div>
+
+        <!-- Kontrolki i statystyki (połączone na dół) -->
+        <div class="bottom-panel" id="bottomPanel" style="display: none;">
+            <div class="bottom-row">
+                <div class="bottom-left">
+                    <button class="btn-toggle-controls" onclick="toggleTableControls()" title="Pokaż/ukryj filtry i opcje">
+                        <span class="material-icons">expand_more</span> Opcje
+                    </button>
+                    <button class="btn btn-small" onclick="showFormatHelp()">
+                        <span class="material-icons">help</span> Pomoc
+                    </button>
+                </div>
+                
+                <div class="stats-inline">
+                    <div class="stat-item">
+                        <span class="material-icons">assessment</span>
+                        <span class="stat-label">Wczytanych:</span>
+                        <span class="stat-value" id="recordCount">0</span>
+                    </div>
+                    <span class="stat-separator">|</span>
+                    <div class="stat-item">
+                        <span class="material-icons">check_circle</span>
+                        <span class="stat-label">Zatwierdzone:</span>
+                        <span class="stat-value" id="confirmedCount">0</span>
+                    </div>
+                    <span class="stat-separator">|</span>
+                    <div class="stat-item">
+                        <span class="material-icons">warning</span>
+                        <span class="stat-label">Weryfikacja:</span>
+                        <span class="stat-value" id="warningCount">0</span>
+                    </div>
+                    <span class="stat-separator">|</span>
+                    <div class="stat-item">
+                        <span class="material-icons">cloud_upload</span>
+                        <span class="stat-label">Postęp:</span>
+                        <span class="stat-value" id="progressPercent">0%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-controls">
+                
+                <div class="filter-group" id="filterGroup" style="display: none;">
+                    <label>
+                        <input type="checkbox" id="filterRed" checked> 
+                        <span>Do weryfikacji</span>
+                    </label>
+                    <label>
+                        <input type="checkbox" id="filterGreen" checked> 
+                        <span>Zatwierdzone</span>
+                    </label>
+                    <label>
+                        <input type="checkbox" id="filterGray" checked> 
+                        <span>Brakujące</span>
+                    </label>
+                    <div class="filter-counter">
+                        Wyświetlono: <span id="filteredCount">0</span> / <span id="totalCount">0</span>
+                    </div>
+                </div>
+                <div class="action-group" id="actionGroup" style="display: none;">
+                    <button class="btn btn-small btn-primary" id="exportBtn" onclick="exportData()">
+                        <span class="material-icons">download</span> Eksportuj TSV
+                    </button>
+                    <button class="btn btn-small btn-secondary" id="saveBtn" onclick="saveToLocalStorage()">
+                        <span class="material-icons">save</span> Zapisz w przeglądarce
+                    </button>
+                    <button class="btn btn-small btn-outline" onclick="clearAllData()">
+                        <span class="material-icons">delete</span> Wyczyść wszystkie
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal edycji zostanie załadowany dynamicznie z edit-modal.html -->
+        <div id="modalContainer"></div>
+        
+        <!-- Loader -->
+        <div class="loader" id="loader">
+            <div class="loader-spinner"></div>
+            <p>Ładowanie danych...</p>
+        </div>
+        
+        <!-- Help modal -->
+        <div class="modal-overlay" id="helpModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Instrukcja obsługi</h2>
+                    <button class="close-btn" onclick="document.getElementById('helpModal').style.display='none'">×</button>
+                </div>
+                <div class="modal-body">
+                    <div>
+                        <strong>4 sposoby załadowania:</strong>
+                        <ol>
+                            <li>📁 <strong>Plik:</strong> TSV/CSV/JSON/XLSX</li>
+                            <li>📋 <strong>Wklej:</strong> Ctrl+V z Excela</li>
+                            <li>⚙️ <strong>Parser:</strong> 5947 rekordów z akt chrztów</li>
+                            <li>📝 <strong>Przykład:</strong> dane testowe</li>
+                        </ol>
+                    </div>
+                    <div style="margin-top: 1rem; padding: 1rem; background: #1a1a1a; border-left: 3px solid #4fc3f7; border-radius: 3px;">
+                        <strong>Znaczenie kolorów:</strong><br/>
+                        🟢 Zielone = zatwierdzone | 🔴 Czerwone = do sprawdzenia | ⚪ Szare = brakujące
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Główny skrypt -->
+    <script src="parent-validator.js?v=20251222-9"></script>
+</body>
+</html>

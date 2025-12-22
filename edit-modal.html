@@ -1,0 +1,125 @@
+<!-- Modal edycji rekordu --> 
+<div class="modal-overlay" id="editModal"> 
+    <div class="modal-content modal-fullscreen"> 
+        <div class="modal-header"> 
+            <h2>Edycja rekordu <span id="modalRecordId"></span></h2> 
+            <button class="close-btn" onclick="closeEditModal()">×</button> 
+        </div> 
+        <div class="modal-body"> 
+            <!-- Oryginalny tekst - sticky --> 
+            <div class="original-text-section"> 
+                <div class="section-header"> 
+                    <span class="material-icons">description</span> 
+                    <span>ORYGINALNY TEKST (TSV)</span> 
+                </div> 
+                <div class="original-text-display" id="originalTextDisplay"></div> 
+            </div> 
+            <form id="editForm"> 
+                <!-- Górny pasek - metadata --> 
+                <div class="top-bar"> 
+                    <div class="field-group"> 
+                        <input type="text" id="editYear" class="top-bar-input"> 
+                        <span class="field-label">Rok</span> 
+                    </div> 
+                    <div class="field-group"> 
+                        <input type="text" id="editPlace" class="top-bar-input"> 
+                        <span class="field-label">Miejscowość</span> 
+                    </div> 
+                    <div class="field-group"> 
+                        <input type="text" id="editNumber" class="top-bar-input"> 
+                        <span class="field-label">Nr aktu</span> 
+                    </div> 
+                    <div class="field-group">
+                        <input type="text" id="editID" class="top-bar-input">
+                        <span class="field-label">ID</span>
+                    </div>
+                </div> 
+                
+                <!-- Dziecko --> 
+                <div class="section-compact child-section"> 
+                    <div class="row-compact"> 
+                        <div class="field-container"> 
+                            <div class="hint-source" id="hintChildSurname"></div> 
+                            <input type="text" id="editSurname" class="field-input"> 
+                            <span class="field-label">Nazwisko</span> 
+                        </div> 
+                        <div class="field-container"> 
+                            <div class="hint-source" id="hintChildName"></div> 
+                            <input type="text" id="editName" class="field-input"> 
+                            <span class="field-label">Imię</span> 
+                        </div> 
+                    </div> 
+                </div> 
+                
+                <!-- Rodzice --> 
+                <div class="parents-row"> 
+                    <!-- Ojciec --> 
+                    <div class="parent-section father-section"> 
+                        <div class="row-compact"> 
+                            <div class="field-container"> 
+                                <div class="hint-source" id="hintFatherName"></div> 
+                                <input type="text" id="editFatherName" class="field-input"> 
+                                <span class="field-label">Imię</span> 
+                            </div> 
+                        </div> 
+                        <div class="row-compact"> 
+                            <div class="field-container"> 
+                                <div class="hint-source" id="hintFatherSurname"></div> 
+                                <input type="text" id="editFatherSurname" class="field-input"> 
+                                <span class="field-label">Nazwisko</span> 
+                            </div> 
+                            <div class="field-container"> 
+                                <input type="text" id="editFatherAge" class="field-input" placeholder="lata"> 
+                                <span class="field-label">Wiek</span> 
+                            </div> 
+                        </div> 
+                    </div> 
+                    
+                    <!-- Matka --> 
+                    <div class="parent-section mother-section"> 
+                        <div class="row-compact"> 
+                            <div class="field-container"> 
+                                <div class="hint-source" id="hintMotherName"></div> 
+                                <input type="text" id="editMotherName" class="field-input"> 
+                                <span class="field-label">Imię</span> 
+                            </div> 
+                        </div> 
+                        <div class="row-compact"> 
+                            <div class="field-container"> 
+                                <div class="hint-source" id="hintMotherSurname"></div> 
+                                <input type="text" id="editMotherSurname" class="field-input"> 
+                                <span class="field-label">Nazwisko panienskie</span> 
+                            </div> 
+                            <div class="field-container"> 
+                                <input type="text" id="editMotherAge" class="field-input" placeholder="lata"> 
+                                <span class="field-label">Wiek</span> 
+                            </div> 
+                        </div> 
+                    </div> 
+                </div> 
+                
+                <!-- Uwagi --> 
+                <div class="section-notes"> 
+                    <div class="field-container full-width"> 
+                        <textarea id="editNotes" class="field-textarea" rows="2" placeholder="Dodatkowe informacje..."></textarea> 
+                        <span class="field-label">Uwagi</span> 
+                    </div> 
+                    <div class="field-container full-width"> 
+                        <textarea id="editOriginalNotes" class="field-textarea" rows="1" readonly placeholder="Oryginalne dane (tylko do odczytu)"></textarea> 
+                        <span class="field-label">Oryginalne dane</span> 
+                    </div> 
+                </div> 
+                
+                <!-- Przyciski akcji --> 
+                <div class="form-actions"> 
+                    <button type="submit" class="btn btn-primary"> 
+                        <span class="material-icons">save</span> Zapisz 
+                    </button> 
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()"> 
+                        <span class="material-icons">close</span> Anuluj 
+                    </button> 
+                </div> 
+            </form> 
+        </div> 
+    </div> 
+</div> 
