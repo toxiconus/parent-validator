@@ -12,20 +12,270 @@ let nameDatabase = {
 let currentEditingRecord = null;
 let tableControlsExpanded = false; // Stan toggle'a opcji
 
+// ==================== CENTRALNY STAN APLIKACJI ====================
+// Nowa architektura: frontend-state management
+const appState = {
+    // Główne dane aplikacji
+    records: [],        // Wszystkie rekordy z metadanymi walidacyjnymi
+    originalRecords: [], // Kopia oryginalnych danych dla porównania zmian
+    
+    // Stan UI
+    filters: { 
+        red: true, 
+        green: true, 
+        gray: true 
+    },
+    stats: { 
+        total: 0, 
+        validated: 0, 
+        warnings: 0, 
+        empty: 0 
+    },
+    history: {
+        undoStack: [],
+        redoStack: [],
+        maxHistorySize: 20  // Limit na historię zmian dla lepszej wydajności pamięci
+    },
+    currentRecord: null, // Dla modala edycji
+    isLoading: false,
+    
+    // Konfiguracja aplikacji
+    version: '1.0.0-alpha',
+    session: {
+        lastSaved: null,
+        autoSaveInterval: 30000, // 30 sekund
+        isDirty: false
+    },
+    
+    // Ustawienia tabeli
+    tableConfig: {
+        visibleColumns: ['id', 'name', 'surname', 'fatherName', 'motherName', 'place', 'recordType'],
+        columnOrder: ['id', 'name', 'surname', 'fatherName', 'motherName', 'place', 'recordType'],
+        savedConfigs: {},
+        pagination: {
+            enabled: true,
+            pageSize: 100,     // Rekordów na stronę
+            currentPage: 1,    // Aktualna strona
+            totalPages: 1,     // Łączna liczba stron
+            showPages: 5       // Liczba widocznych przycisków stron
+        }
+    },
+    
+    // Stan sortowania tabeli
+    sortState: {
+        column: null,    // 'id', 'name', 'surname', etc.
+        direction: null  // 'asc', 'desc', null
+    },
+    
+    // Stan wyszukiwania
+    searchState: {
+        query: '',       // Aktualne zapytanie wyszukiwania
+        fields: ['surname', 'name', 'fatherName', 'fatherSurname', 'motherName', 'motherSurname', 'place'] // Pola do przeszukania
+    }
+};
+
+// ==================== FUNKCJE ZARZĄDZANIA STANEM ====================
+function getAppState() { 
+    return appState; 
+}
+
+function updateAppState(updates) {
+    Object.assign(appState, updates);
+    appState.session.isDirty = true;
+    notifyStateChange();
+}
+
+function notifyStateChange() {
+    // Placeholder dla przyszłych obserwatorów stanu
+    console.log('App state updated:', Object.keys(appState));
+}
+
+// ==================== FUNKCJA UPDATE RECORD ====================
+// Centralna funkcja do aktualizacji rekordów - nowa architektura
+function updateRecord(recordId, field, value) {
+    // Zapisz stan przed zmianą dla undo/redo
+    saveToHistory();
+    
+    const record = appState.records.find(r => r.id === recordId);
+    if (!record) {
+        console.warn('Record not found:', recordId);
+        return false;
+    }
+    
+    // Zapisz do historii zmian (limit 20 zmian na rekord)
+    if (!record.changeHistory) record.changeHistory = [];
+    record.changeHistory.push({
+        field: field,
+        oldValue: record[field],
+        newValue: value,
+        timestamp: Date.now()
+    });
+    
+    // Limit historii zmian
+    if (record.changeHistory.length > 20) {
+        record.changeHistory = record.changeHistory.slice(-20);
+    }
+    
+    // Aktualizuj wartość
+    record[field] = value;
+    record.isModified = true;
+    record.lastModified = Date.now();
+    
+    // Walidacja lokalna
+    validateRecordLocal(record);
+    
+    // Oznacz jako modified w appState
+    appState.session.isDirty = true;
+    
+    // Aktualizuj statystyki
+    updateStats();
+    
+    // Odśwież tabelę
+    renderTable();
+    
+    console.log(`✅ Record ${recordId} updated: ${field} = ${value}`);
+    return true;
+}
+
+// ==================== LOKALNA WALIDACJA ====================
+// Funkcja walidacji bez backendu
+function validateRecordLocal(record) {
+    if (!record) return;
+    
+    // Reset validation
+    record.validation = record.validation || {};
+    
+    // Validate each field
+    const fields = ['fatherName', 'motherName', 'fatherSurname', 'motherSurname', 'place'];
+    fields.forEach(field => {
+        const value = record[field];
+        record.validation[field] = validateFieldLocal(field, value);
+    });
+    
+    // Dodaj kolor dla całego rekordu
+    record.statusColor = calculateRecordStatusColor(record);
+}
+
+function validateFieldLocal(fieldType, value) {
+    if (!value || value.trim() === '') {
+        return { status: 'empty', color: 'gray', message: 'Pole puste' };
+    }
+    
+    const normalizedValue = value.trim().toLowerCase();
+    
+    // Sprawdź w zależności od typu pola
+    if (fieldType.includes('Name') && fieldType !== 'place') {
+        // Imiona
+        const isValid = nameDatabase.allNames && nameDatabase.allNames.has(normalizedValue);
+        return isValid 
+            ? { status: 'valid', color: 'green', message: 'Imię poprawne' }
+            : { status: 'invalid', color: 'red', message: 'Imię nieznane' };
+    } else if (fieldType.includes('Surname')) {
+        // Nazwiska
+        const isValid = nameDatabase.allSurnames && nameDatabase.allSurnames.has(normalizedValue);
+        return isValid 
+            ? { status: 'valid', color: 'green', message: 'Nazwisko poprawne' }
+            : { status: 'invalid', color: 'red', message: 'Nazwisko nieznane' };
+    } else if (fieldType === 'place') {
+        // Miejscowości
+        const isValid = nameDatabase.places && nameDatabase.places.has(normalizedValue);
+        return isValid 
+            ? { status: 'valid', color: 'green', message: 'Miejscowość poprawna' }
+            : { status: 'warning', color: 'orange', message: 'Miejscowość nieznana' };
+    }
+    
+    return { status: 'unknown', color: 'gray', message: 'Nie sprawdzone' };
+}
+
+function calculateRecordStatusColor(record) {
+    if (!record.validation) return 'gray';
+    
+    const validations = Object.values(record.validation);
+    const hasRed = validations.some(v => v.color === 'red');
+    const hasOrange = validations.some(v => v.color === 'orange');
+    const hasGreen = validations.some(v => v.color === 'green');
+    
+    if (hasRed) return 'red';
+    if (hasOrange) return 'orange';
+    if (hasGreen) return 'green';
+    return 'gray';
+}
+
+// ==================== STATYSTYKI ====================
+// Aktualizuj statystyki aplikacji
+function updateStats() {
+    const records = appState.records;
+    const stats = {
+        total: records.length,
+        valid: 0,
+        invalid: 0,
+        warning: 0,
+        empty: 0,
+        modified: 0,
+        baptism: 0,
+        death: 0,
+        marriage: 0,
+        lastUpdated: Date.now()
+    };
+    
+    records.forEach(record => {
+        // Liczenie po statusie
+        const color = record.statusColor || 'gray';
+        switch (color) {
+            case 'green': stats.valid++; break;
+            case 'red': stats.invalid++; break;
+            case 'orange': stats.warning++; break;
+            case 'gray': stats.empty++; break;
+        }
+        
+        // Liczenie po typie rekordu
+        if (record.recordType === 'baptism') stats.baptism++;
+        else if (record.recordType === 'death') stats.death++;
+        else if (record.recordType === 'marriage') stats.marriage++;
+        
+        // Liczenie zmodyfikowanych
+        if (record.isModified) stats.modified++;
+    });
+    
+    appState.stats = stats;
+    console.log('📊 Stats updated:', stats);
+}
+
+// ==================== WZBOGACANIE REKORDÓW ====================
+// Dodaj metadane walidacyjne do rekordu
+function enrichRecordWithMetadata(record) {
+    if (!record) return record;
+    
+    // Dodaj domyślne metadane
+    record.recordType = record.recordType || 'baptism';
+    record.isModified = record.isModified || false;
+    record.lastModified = record.lastModified || Date.now();
+    record.changeHistory = record.changeHistory || [];
+    record.validation = record.validation || {};
+    
+    // Walidacja lokalna
+    validateRecordLocal(record);
+    
+    return record;
+}
+
 // ==================== TOGGLE TABLE CONTROLS ====================
 function toggleTableControls() {
     tableControlsExpanded = !tableControlsExpanded;
     const filterGroup = document.getElementById('filterGroup');
     const actionGroup = document.getElementById('actionGroup');
+    const searchGroup = document.getElementById('searchGroup');
     const toggleBtn = document.querySelector('.btn-toggle-controls');
     
     if (tableControlsExpanded) {
         filterGroup.style.display = 'grid';
         actionGroup.style.display = 'flex';
+        searchGroup.style.display = 'block';
         toggleBtn.classList.add('expanded');
     } else {
         filterGroup.style.display = 'none';
         actionGroup.style.display = 'none';
+        searchGroup.style.display = 'none';
         toggleBtn.classList.remove('expanded');
     }
 }
@@ -38,6 +288,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Załaduj modal PRZED setupem event listeners
         loadEditModal().then(() => {
             setupEventListeners();
+            initTableSorting(); // Inicjalizuj sortowanie tabeli
+            initSearch();       // Inicjalizuj wyszukiwanie
             console.log('✅ Inicjalizacja zakończona pomyślnie');
             
             // Auto-ładowanie pliku Ur Blin ORG.txt
@@ -70,15 +322,20 @@ function autoLoadDefaultFile() {
         })
         .then(text => {
             console.log('Auto-załadowano Ur Blin ORG.txt do textarea');
+            console.log('Długość tekstu:', text.length, 'znaków');
+            console.log('Liczba linii:', text.split('\n').length);
             const textarea = document.getElementById('pasteTextarea');
             if (textarea) {
                 textarea.value = text;
                 detectAndHintFormat(text);
                 updateInputPreview(text);
+                // Automatycznie sparsuj dane
+                parseDataWithFormatDetection(text);
             }
         })
         .catch(err => {
             console.log('⚠️ Brak pliku Ur Blin ORG.txt - użyj Ctrl+V aby wkleić dane');
+            console.error('Błąd ładowania:', err);
         });
 }
 
@@ -484,34 +741,82 @@ function getEditModalFallbackHtml() {
 
 // ==================== ŁADOWANIE BAZY NAZW ====================
 function loadNameDatabase() {
+    const cacheKey = 'nameDatabaseCache';
+    const cacheExpiryKey = 'nameDatabaseCacheExpiry';
+    const cacheDuration = 24 * 60 * 60 * 1000; // 24 godziny w ms
+    
+    // Sprawdź cache
+    const cached = localStorage.getItem(cacheKey);
+    const cacheExpiry = localStorage.getItem(cacheExpiryKey);
+    const now = Date.now();
+    
+    if (cached && cacheExpiry && now < parseInt(cacheExpiry)) {
+        console.log('Ładowanie baz danych z localStorage cache');
+        try {
+            const cachedData = JSON.parse(cached);
+            Object.assign(nameDatabase, cachedData);
+            console.log('Cache załadowany pomyślnie');
+            return; // Nie ładuj ponownie
+        } catch (err) {
+            console.warn('Błąd parsowania cache:', err);
+            // Kontynuuj ładowanie z serwera
+        }
+    }
+    
+    console.log('Ładowanie baz danych z serwera...');
     const files = [
         'imiona_meskie.json', 'imiona_zenskie.json', 'imiona_wszystkie.json',
         'nazwiska_meskie.json', 'nazwiska_zenskie.json', 'nazwiska_wszystkie.json'
     ];
     const keys = ['maleNames', 'femaleNames', 'allNames', 'maleSurnames', 'femaleSurnames', 'allSurnames'];
-
+    
+    let loadedCount = 0;
+    const totalFiles = files.length + 1; // +1 dla places
+    
+    const checkAllLoaded = () => {
+        loadedCount++;
+        if (loadedCount === totalFiles) {
+            // Wszystkie pliki załadowane - zapisz do cache
+            try {
+                localStorage.setItem(cacheKey, JSON.stringify(nameDatabase));
+                localStorage.setItem(cacheExpiryKey, (now + cacheDuration).toString());
+                console.log('Bazy danych zapisane w localStorage cache');
+            } catch (err) {
+                console.warn('Błąd zapisu cache:', err);
+            }
+        }
+    };
+    
     files.forEach((file, i) => {
-        fetch(`data/${file}`)
+        fetch(`../../../data/${file}`)
             .then(r => r.ok ? r.json() : [])
             .then(data => {
                 if (Array.isArray(data)) {
                     nameDatabase[keys[i]] = new Set(data.map(item => item.trim().toLowerCase()));
                     console.log(`Załadowano ${keys[i]}: ${data.length} elementów`);
                 }
+                checkAllLoaded();
             })
-            .catch(err => console.warn(`Błąd ładowania ${file}:`, err));
+            .catch(err => {
+                console.warn(`Błąd ładowania ${file}:`, err);
+                checkAllLoaded();
+            });
     });
     
     // Load places database
-    fetch('data/places.json')
+    fetch('../../../data/places.json')
         .then(r => r.ok ? r.json() : [])
         .then(data => {
             if (Array.isArray(data)) {
                 nameDatabase.places = new Set(data.map(item => item.trim().toLowerCase()));
                 console.log(`Załadowano places: ${data.length} elementów`);
             }
+            checkAllLoaded();
         })
-        .catch(err => console.warn('Błąd ładowania places.json:', err));
+        .catch(err => {
+            console.warn('Błąd ładowania places.json:', err);
+            checkAllLoaded();
+        });
 }
 
 // ==================== EVENT LISTENERS ====================
@@ -576,15 +881,30 @@ function setupEventListeners() {
             };
             input.click();
         }
+        
+        // Undo/Redo shortcuts
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            undo();
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+            e.preventDefault();
+            redo();
+        }
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Z') {
+            e.preventDefault();
+            redo();
+        }
     });
 
-    filterRed.addEventListener('change', () => generateTableWithBackend());
-    filterGreen.addEventListener('change', () => generateTableWithBackend());
-    filterGray.addEventListener('change', () => generateTableWithBackend());
+    filterRed.addEventListener('change', () => renderTable());
+    filterGreen.addEventListener('change', () => renderTable());
+    filterGray.addEventListener('change', () => renderTable());
     
     // Przycisk parsowania danych
     parseButton.addEventListener('click', () => {
         const text = document.getElementById('pasteTextarea').value.trim();
+        console.log('Kliknięto Wczytaj dane, text.length:', text.length);
         if (text) {
             parseDataWithFormatDetection(text);
         } else {
@@ -648,9 +968,9 @@ function validateFieldValue(fieldId, value) {
     
     // Sprawdź odpowiednie bazy danych w zależności od pola
     if (fieldId.includes('Name')) {
-        return allNames.has(lowerValue) || allSurnames.has(lowerValue);
+        return nameDatabase.allNames.has(lowerValue) || nameDatabase.allSurnames.has(lowerValue);
     } else if (fieldId.includes('Surname')) {
-        return allSurnames.has(lowerValue);
+        return nameDatabase.allSurnames.has(lowerValue);
     }
     
     return false;
@@ -812,6 +1132,9 @@ async function parseAndLoadPastedData() {
 
     // WYCZYŚĆ STARE DANE PRZED PARSOWANIEM NOWYCH!
     allData = [];
+    appState.records = [];
+    appState.originalRecords = [];
+    appState.session.isDirty = false;
     console.log('Wyczyszczono stare dane. Parsowanie nowych...');
 
     const separator = detectSeparator(text);
@@ -820,20 +1143,31 @@ async function parseAndLoadPastedData() {
         console.log('Rozpoczynam parsowanie... separator:', JSON.stringify(separator));
         await parseDataWithFormatDetection(text, separator);
         console.log('Po parseDataWithFormatDetection, allData.length =', allData.length);
+        console.log('Po parseDataWithFormatDetection, appState.records.length =', appState.records.length);
         
-        if (allData.length === 0) {
+        if (allData.length === 0 && appState.records.length === 0) {
             console.warn('Brak danych po parsowaniu - sprawdzam separator');
             // Spróbuj inny separator
             const altSeparator = separator === '\t' ? ',' : '\t';
             await parseDataWithFormatDetection(text, altSeparator);
         }
         
-        console.log('Wyświetlam dane... allData.length =', allData.length);
+        console.log('Wyświetlam dane... allData.length =', allData.length, 'appState.records.length =', appState.records.length);
         if (allData.length > 0) {
-            console.log('Przykładowy rekord:', allData[0]);
+            console.log('Przykładowy rekord allData:', allData[0]);
         }
+        if (appState.records.length > 0) {
+            console.log('Przykładowy rekord appState:', appState.records[0]);
+        }
+        
+        // Migracja: jeśli dane są w allData, przenieś do appState
+        if (allData.length > 0 && appState.records.length === 0) {
+            appState.records = allData.map(record => enrichRecordWithMetadata({...record}));
+            appState.originalRecords = [...allData];
+        }
+        
         displayData();
-        showNotification(`Załadowano ${allData.length} rekordów`, 'success');
+        showNotification(`Załadowano ${appState.records.length} rekordów`, 'success');
         
         // Nie czyszczmy - może user chce edytować
         // textarea.value = '';
@@ -877,7 +1211,7 @@ function handleFileSelect(e) {
         try {
             parseDataWithFormatDetection(ev.target.result);
             displayData();
-            showNotification(`Załadowano plik: ${file.name} (${allData.length} rekordów)`, 'success');
+            showNotification(`Załadowano plik: ${file.name} (${appState.records.length} rekordów)`, 'success');
         } catch (error) {
             showNotification('Błąd parsowania pliku', 'warning');
             console.error(error);
@@ -911,6 +1245,9 @@ CH.LUB.BLIN.0001575	Zdebel	Paweł	2	1841	22.01	Blinów	X	X	Magdalena	Zdebel	ojci
 CH.LUB.BLIN.0001528	Jachura	Stanisław	3	1840			Brzozówka , Jan i Franciszka Stępień`;
     
     allData = []; // Wyczyść stare dane
+    appState.records = [];
+    appState.originalRecords = [];
+    appState.session.isDirty = false;
     await parseDataWithFormatDetection(example, '\t');
     displayData();
     showNotification('Załadowano dane przykładowe', 'success');
@@ -925,6 +1262,8 @@ function loadSavedData() {
     
     try {
         allData = JSON.parse(savedData);
+        appState.records = allData.map(record => enrichRecordWithMetadata({...record}));
+        appState.originalRecords = [...allData];
         if (allData.length > 0) {
             displayData();
             showNotification(`Przywrócono ${allData.length} rekordów z pamięci przeglądarki`, 'success');
@@ -965,10 +1304,14 @@ async function loadParserResults() {
             motherMaidenNameValidated: false
         }));
         
+        // Migracja do appState
+        appState.records = allData.map(record => enrichRecordWithMetadata({...record}));
+        appState.originalRecords = [...allData];
+        
         // Walidacja przez backend zamiast lokalnej
         await validateWithBackend(allData);
         displayData();
-        showNotification(`Załadowano ${allData.length} rekordów z parsera`, 'success');
+        showNotification(`Załadowano ${appState.records.length} rekordów z parsera`, 'success');
     } catch (err) {
         console.error('Błąd ładowania parsera:', err);
         showNotification('Nie można załadować parser_v2_results.json', 'warning');
@@ -977,12 +1320,18 @@ async function loadParserResults() {
 
 // ==================== PARSOWANIE DANYCH Z FORMATU TSV ====================
 async function parseDataWithFormatDetection(content, separator = '\t') {
+    console.log('parseDataWithFormatDetection wywołane, content.length:', content.length);
+    // Wyczyść poprzednie dane
+    allData = [];
+    appState.records = [];
+    appState.originalRecords = [];
+    
     const lines = content.split('\n')
         .map(l => l.trim())
         .filter(l => l && !l.startsWith('//') && !l.startsWith('#'));
     
+    console.log('Po filtrowaniu linii:', lines.length);
     if (lines.length === 0) {
-        allData = [];
         return;
     }
 
@@ -997,7 +1346,7 @@ async function parseDataWithFormatDetection(content, separator = '\t') {
         if (response.ok) {
             const result = await response.json();
             if (result.success && result.records) {
-                console.log('✅ Parsowanie przez Python backend', result.records.length, 'rekordów');
+                console.log('Backend zwrócił', result.records.length, 'rekordów');
                 globalRecordsData = result.records; // Zapisz surowe dane dla eksportu
                 allData = result.records.map(r => ({
                     id: r.record_id || '',
@@ -1022,6 +1371,8 @@ async function parseDataWithFormatDetection(content, separator = '\t') {
                     motherMaidenNameValidated: r.validation?.mother_surname_valid || false
                 }));
                 console.log('✅ Dane sparsowane przez backend, wywołuję displayData()');
+                appState.records = allData; // Aktualizuj appState
+                console.log('appState.records.length po aktualizacji:', appState.records.length);
                 displayData();
                 return;
             }
@@ -1032,6 +1383,11 @@ async function parseDataWithFormatDetection(content, separator = '\t') {
     
     // Fallback: lokalny JavaScript parser
     console.log('📝 Parsowanie lokalnie (JavaScript Parser V2)');
+    console.log('Liczba linii do sparsowania:', lines.length);
+    // Wyczyść dane przed lokalnym parsowaniem
+    allData = [];
+    appState.records = [];
+    appState.originalRecords = [];
     parseDataLocalFallback(content, separator);
 }
 
@@ -1045,6 +1401,7 @@ function parseDataLocalFallback(content, separator = '\t') {
     
     if (lines.length === 0) {
         allData = [];
+        appState.records = [];
         showNotification('Brak danych do parsowania', 'warning');
         return;
     }
@@ -1153,7 +1510,7 @@ async function generateTableWithBackend() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                records: allData,
+                records: appState.records,
                 filters: filters
             })
         });
@@ -1193,7 +1550,7 @@ async function generateTableWithBackend() {
         // Fallback: lokalne generowanie - ale unikaj rekursji
         console.log('generateTableWithBackend: Próba lokalnego generowania tabeli');
         try {
-            updateTableDisplay();
+            renderTable();
         } catch (localError) {
             console.error('Błąd lokalnego generowania tabeli:', localError);
         }
@@ -1297,6 +1654,10 @@ async function parseDataWithBackend(dataLines, separator) {
             motherMaidenNameValidated: false
         }));
         
+        // Migracja do appState
+        appState.records = allData.map(record => enrichRecordWithMetadata({...record}));
+        appState.originalRecords = [...allData];
+        
         // Walidacja przez backend
         await validateWithBackend(allData);
         
@@ -1306,9 +1667,10 @@ async function parseDataWithBackend(dataLines, separator) {
         }
         
         // Generuj tabelę przez backend
-        await generateTableWithBackend();
+        // await generateTableWithBackend();
+        displayData(); // Użyj standardowego wyświetlania
         
-        showNotification(`Załadowano ${allData.length} rekordów z backendu`, 'success');
+        showNotification(`Załadowano ${appState.records.length} rekordów z backendu`, 'success');
         
         // Pokaż podsumowanie
         if (result.stats) {
@@ -1551,11 +1913,12 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
             if (parsed.motherSurname) record.motherSurname = parsed.motherSurname;
         }
         
-        validateRecord(record);
+        validateRecordLocal(record);
         allData.push(record);
     });
     
     console.log('parseDataWithIds finished: allData.length =', allData.length);
+    appState.records = allData; // Aktualizuj appState
     displayData();
 }
 // ==================== PARSER TEKSTU GENEALOGICZNEGO ====================
@@ -1753,7 +2116,7 @@ function getRecordStatus(record) {
 
 // ==================== WYŚWIETLANIE ====================
 function displayData() {
-    if (allData.length === 0) {
+    if (appState.records.length === 0) {
         showNotification('Brak danych do wyświetlenia', 'warning');
         return;
     }
@@ -1765,15 +2128,15 @@ function displayData() {
     if (bottomPanel) bottomPanel.style.display = 'block';
     
     updateStats();
-    generateTableWithBackend();
+    renderTable();
     
     // Pokaż pierwszy wiersz w okienku
-    if (allData.length > 0) {
-        showOriginalLine(allData[0]);
+    if (appState.records.length > 0) {
+        showOriginalLine(appState.records[0]);
     }
 }
 
-function updateTableDisplay() {
+function renderTable() {
     const tbody = document.getElementById('tableBody');
     if (!tbody) return;
     
@@ -1783,16 +2146,306 @@ function updateTableDisplay() {
     const showGreen = document.getElementById('filterGreen').checked;
     const showGray = document.getElementById('filterGray').checked;
     
-    console.log('🔍 updateTableDisplay: places database loaded:', !!nameDatabase.places, 'size:', nameDatabase.places?.size);
+    console.log('🔍 renderTable: places database loaded:', !!nameDatabase.places, 'size:', nameDatabase.places?.size);
 
-    allData.forEach(record => {
+    // Filtrowanie rekordów
+    let filteredRecords = appState.records.filter(record => {
         const status = getRecordStatus(record);
         if ((status === 'warning' && !showRed) ||
             (status === 'validated' && !showGreen) ||
-            (status === 'empty' && !showGray)) return;
+            (status === 'empty' && !showGray)) return false;
+        
+        // Filtrowanie po wyszukiwaniu
+        if (appState.searchState.query) {
+            const query = appState.searchState.query.toLowerCase();
+            const matchesSearch = appState.searchState.fields.some(field => {
+                const value = record[field] || '';
+                return value.toString().toLowerCase().includes(query);
+            });
+            if (!matchesSearch) return false;
+        }
+        
+        return true;
+    });
 
+    // Sortowanie
+    if (appState.sortState.direction) {
+        filteredRecords.sort((a, b) => {
+            let aVal = a[appState.sortState.column] || '';
+            let bVal = b[appState.sortState.column] || '';
+            
+            // Dla liczb (wiek, rok, numer)
+            if (appState.sortState.column.includes('Age') || appState.sortState.column === 'year' || appState.sortState.column === 'number') {
+                aVal = parseFloat(aVal.replace('l.', '')) || 0;
+                bVal = parseFloat(bVal.replace('l.', '')) || 0;
+            } else {
+                // Dla tekstu - case insensitive
+                aVal = aVal.toString().toLowerCase();
+                bVal = bVal.toString().toLowerCase();
+            }
+            
+            if (appState.sortState.direction === 'asc') {
+                return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+            } else {
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+            }
+        });
+    }
+
+    // Paginacja z virtual scrolling dla dużych zbiorów
+    const totalRecords = filteredRecords.length;
+    const pageSize = appState.tableConfig.pagination.pageSize;
+    const currentPage = appState.tableConfig.pagination.currentPage;
+    const totalPages = Math.ceil(totalRecords / pageSize);
+    appState.tableConfig.pagination.totalPages = totalPages;
+
+    // Virtual scrolling dla bardzo dużych zbiorów (>5000 rekordów)
+    const useVirtualScrolling = totalRecords > 5000;
+    
+    if (useVirtualScrolling) {
+        console.log('🔄 Używam virtual scrolling dla', totalRecords, 'rekordów');
+        renderTableVirtual(filteredRecords, tbody);
+        
+        // Dodaj event listener dla scroll z throttling
+        const tableWrapper = tbody.closest('.table-wrapper');
+        if (tableWrapper && !tableWrapper.hasVirtualScrollListener) {
+            let scrollTimeout;
+            tableWrapper.addEventListener('scroll', () => {
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(() => {
+                    renderTableVirtual(filteredRecords, tbody);
+                }, 16); // ~60fps
+            });
+            tableWrapper.hasVirtualScrollListener = true;
+        }
+        
+        renderPaginationControls(totalRecords, currentPage, totalPages);
+        return;
+    }
+
+    // Standardowa paginacja dla mniejszych zbiorów
+    // Upewnij się, że currentPage jest w prawidłowym zakresie
+    if (currentPage > totalPages && totalPages > 0) {
+        appState.tableConfig.pagination.currentPage = totalPages;
+    } else if (currentPage < 1) {
+        appState.tableConfig.pagination.currentPage = 1;
+    }
+
+    // Oblicz zakres dla bieżącej strony
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, totalRecords);
+    const pageRecords = filteredRecords.slice(startIndex, endIndex);
+
+    // Aktualizuj liczniki
+    updateFilteredCounts(totalRecords, appState.records.length);
+
+    // Renderuj tylko rekordy z bieżącej strony
+    pageRecords.forEach(record => {
+        const status = getRecordStatus(record);
         tbody.appendChild(createTableRow(record, status));
     });
+
+    // Renderuj kontrolki paginacji
+    renderPaginationControls(totalRecords, currentPage, totalPages);
+}
+
+// ==================== VIRTUAL SCROLLING ====================
+function renderTableVirtual(filteredRecords, tbody) {
+    const totalRecords = filteredRecords.length;
+    const viewportHeight = 600; // wysokość viewport w px
+    const rowHeight = 40; // przybliżona wysokość wiersza w px
+    const visibleRows = Math.ceil(viewportHeight / rowHeight);
+    const bufferRows = 10; // dodatkowe wiersze bufora
+    
+    // Oblicz zakres widocznych wierszy na podstawie scroll position
+    const scrollTop = tbody.parentElement.scrollTop || 0;
+    const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - bufferRows);
+    const endIndex = Math.min(totalRecords, startIndex + visibleRows + bufferRows * 2);
+    
+    // Wyczyść tabelę
+    tbody.innerHTML = '';
+    
+    // Dodaj padding na górze dla scrolla
+    if (startIndex > 0) {
+        const paddingRow = document.createElement('tr');
+        paddingRow.style.height = `${startIndex * rowHeight}px`;
+        paddingRow.className = 'virtual-padding';
+        tbody.appendChild(paddingRow);
+    }
+    
+    // Renderuj widoczne wiersze
+    for (let i = startIndex; i < endIndex; i++) {
+        const record = filteredRecords[i];
+        const status = getRecordStatus(record);
+        tbody.appendChild(createTableRow(record, status));
+    }
+    
+    // Dodaj padding na dole
+    if (endIndex < totalRecords) {
+        const paddingRow = document.createElement('tr');
+        paddingRow.style.height = `${(totalRecords - endIndex) * rowHeight}px`;
+        paddingRow.className = 'virtual-padding';
+        tbody.appendChild(paddingRow);
+    }
+    
+    // Aktualizuj liczniki
+    updateFilteredCounts(totalRecords, appState.records.length);
+    
+    console.log(`🔄 Virtual scroll: rendered ${endIndex - startIndex} rows (${startIndex}-${endIndex}) of ${totalRecords}`);
+}
+
+// ==================== HISTORY MANAGEMENT ====================
+function saveToHistory() {
+    // Zapisz aktualny stan przed zmianą
+    const stateSnapshot = {
+        records: JSON.parse(JSON.stringify(appState.records)),
+        timestamp: Date.now()
+    };
+    
+    appState.history.undoStack.push(stateSnapshot);
+    
+    // Ogranicz rozmiar historii
+    if (appState.history.undoStack.length > appState.history.maxHistorySize) {
+        appState.history.undoStack.shift();
+    }
+    
+    // Wyczyść redo stack przy nowej zmianie
+    appState.history.redoStack = [];
+    
+    updateUndoRedoButtons();
+}
+
+function undo() {
+    if (appState.history.undoStack.length === 0) {
+        showNotification('Brak zmian do cofnięcia', 'warning');
+        return;
+    }
+    
+    // Zapisz aktualny stan do redo
+    const currentState = {
+        records: JSON.parse(JSON.stringify(appState.records)),
+        timestamp: Date.now()
+    };
+    appState.history.redoStack.push(currentState);
+    
+    // Przywróć poprzedni stan
+    const previousState = appState.history.undoStack.pop();
+    appState.records = previousState.records;
+    
+    // Odśwież UI
+    renderTable();
+    updateStats();
+    updateUndoRedoButtons();
+    
+    showNotification('Cofnięto ostatnią zmianę', 'info');
+}
+
+function redo() {
+    if (appState.history.redoStack.length === 0) {
+        showNotification('Brak zmian do przywrócenia', 'warning');
+        return;
+    }
+    
+    // Zapisz aktualny stan do undo
+    const currentState = {
+        records: JSON.parse(JSON.stringify(appState.records)),
+        timestamp: Date.now()
+    };
+    appState.history.undoStack.push(currentState);
+    
+    // Przywróć następny stan
+    const nextState = appState.history.redoStack.pop();
+    appState.records = nextState.records;
+    
+    // Odśwież UI
+    renderTable();
+    updateStats();
+    updateUndoRedoButtons();
+    
+    showNotification('Przywrócono zmianę', 'info');
+}
+
+function updateUndoRedoButtons() {
+    // Można dodać przyciski undo/redo do UI jeśli potrzebne
+    // Na razie używamy skrótów klawiszowych
+}
+
+function renderPaginationControls(totalRecords, currentPage, totalPages) {
+    const paginationContainer = document.getElementById('paginationControls');
+    if (!paginationContainer) return;
+
+    if (totalPages <= 1) {
+        paginationContainer.innerHTML = '';
+        return;
+    }
+
+    let html = '<div class="pagination-info">';
+    html += `Strona ${currentPage} z ${totalPages} (${totalRecords} rekordów)`;
+    html += '</div>';
+
+    html += '<div class="pagination-buttons">';
+
+    // Przycisk "Pierwsza"
+    if (currentPage > 1) {
+        html += '<button class="btn btn-small" onclick="goToPage(1)">⏮️ Pierwsza</button>';
+    }
+
+    // Przycisk "Poprzednia"
+    if (currentPage > 1) {
+        html += `<button class="btn btn-small" onclick="goToPage(${currentPage - 1})">⬅️ Poprzednia</button>`;
+    }
+
+    // Numery stron
+    const showPages = appState.tableConfig.pagination.showPages;
+    let startPage = Math.max(1, currentPage - Math.floor(showPages / 2));
+    let endPage = Math.min(totalPages, startPage + showPages - 1);
+
+    // Dostosuj startPage jeśli jesteśmy blisko końca
+    if (endPage - startPage + 1 < showPages) {
+        startPage = Math.max(1, endPage - showPages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        const activeClass = i === currentPage ? ' active' : '';
+        html += `<button class="btn btn-small pagination-page${activeClass}" onclick="goToPage(${i})">${i}</button>`;
+    }
+
+    // Przycisk "Następna"
+    if (currentPage < totalPages) {
+        html += `<button class="btn btn-small" onclick="goToPage(${currentPage + 1})">Następna ➡️</button>`;
+    }
+
+    // Przycisk "Ostatnia"
+    if (currentPage < totalPages) {
+        html += `<button class="btn btn-small" onclick="goToPage(${totalPages})">Ostatnia ⏭️</button>`;
+    }
+
+    html += '</div>';
+
+    // Selektor rozmiaru strony
+    html += '<div class="page-size-selector">';
+    html += '<label>Rozmiar strony: ';
+    html += '<select onchange="changePageSize(this.value)">';
+    [50, 100, 200, 500, 1000].forEach(size => {
+        const selected = size === appState.tableConfig.pagination.pageSize ? ' selected' : '';
+        html += `<option value="${size}"${selected}>${size}</option>`;
+    });
+    html += '</select>';
+    html += '</label>';
+    html += '</div>';
+
+    paginationContainer.innerHTML = html;
+}
+
+function goToPage(page) {
+    appState.tableConfig.pagination.currentPage = page;
+    renderTable();
+}
+
+function changePageSize(newSize) {
+    appState.tableConfig.pagination.pageSize = parseInt(newSize);
+    appState.tableConfig.pagination.currentPage = 1; // Reset do pierwszej strony
+    renderTable();
 }
 
 function createTableRow(record, status) {
@@ -1975,9 +2628,9 @@ function createTableRow(record, status) {
 }
 
 function updateStats() {
-    const total = allData.length;
-    const validated = allData.filter(r => getRecordStatus(r) === 'validated').length;
-    const warning = allData.filter(r => getRecordStatus(r) === 'warning').length;
+    const total = appState.records.length;
+    const validated = appState.records.filter(r => getRecordStatus(r) === 'validated').length;
+    const warning = appState.records.filter(r => getRecordStatus(r) === 'warning').length;
 
     const recordCount = document.getElementById('recordCount');
     const confirmedCount = document.getElementById('confirmedCount');
@@ -1988,6 +2641,156 @@ function updateStats() {
     if (confirmedCount) confirmedCount.textContent = validated;
     if (warningCount) warningCount.textContent = warning;
     if (progressPercent) progressPercent.textContent = total > 0 ? Math.round(validated / total * 100) + '%' : '0%';
+}
+
+function updateFilteredCounts(filtered, total) {
+    const filteredCount = document.getElementById('filteredCount');
+    const totalCount = document.getElementById('totalCount');
+    
+    if (filteredCount) filteredCount.textContent = filtered;
+    if (totalCount) totalCount.textContent = total;
+    
+    // Aktualizuj podsumowanie tabeli z informacjami o paginacji
+    const tableSummary = document.getElementById('tableSummary');
+    if (tableSummary) {
+        const currentPage = appState.tableConfig.pagination.currentPage;
+        const pageSize = appState.tableConfig.pagination.pageSize;
+        const startRecord = (currentPage - 1) * pageSize + 1;
+        const endRecord = Math.min(currentPage * pageSize, filtered);
+        
+        if (filtered > pageSize) {
+            tableSummary.textContent = `Wyświetlono ${startRecord}-${endRecord} z ${filtered} rekordów (strona ${currentPage})`;
+        } else {
+            tableSummary.textContent = `Wyświetlono ${filtered} rekordów`;
+        }
+    }
+}
+
+// ==================== SEARCH FUNCTIONALITY ====================
+function performSearch(query) {
+    appState.searchState.query = query.trim();
+    renderTable();
+}
+
+function clearSearch() {
+    appState.searchState.query = '';
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    renderTable();
+}
+
+function initSearch() {
+    const searchInput = document.getElementById('searchInput');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    
+    let searchTimeout;
+    
+    if (searchInput) {
+        // Obsługa wprowadzania tekstu z debouncing
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                performSearch(e.target.value);
+            }, 300); // 300ms debounce
+        });
+        
+        // Obsługa klawisza Enter
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                clearSearch();
+            }
+        });
+    }
+    
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', clearSearch);
+    }
+}
+
+// ==================== TABLE SORTING ====================
+function sortTable(column) {
+    // Jeśli kliknięto tę samą kolumnę, zmień kierunek
+    if (appState.sortState.column === column) {
+        if (appState.sortState.direction === 'asc') {
+            appState.sortState.direction = 'desc';
+        } else if (appState.sortState.direction === 'desc') {
+            appState.sortState.direction = null;
+            appState.sortState.column = null;
+        } else {
+            appState.sortState.direction = 'asc';
+        }
+    } else {
+        // Nowa kolumna - zacznij od asc
+        appState.sortState.column = column;
+        appState.sortState.direction = 'asc';
+    }
+    
+    // Zaktualizuj klasy CSS nagłówków
+    updateSortIndicators();
+    
+    // Sortuj dane
+    if (appState.sortState.direction) {
+        appState.records.sort((a, b) => {
+            let aVal = a[column] || '';
+            let bVal = b[column] || '';
+            
+            // Dla liczb (wiek, rok, numer)
+            if (column.includes('Age') || column === 'year' || column === 'number') {
+                aVal = parseFloat(aVal.replace('l.', '')) || 0;
+                bVal = parseFloat(bVal.replace('l.', '')) || 0;
+            } else {
+                // Dla tekstu - case insensitive
+                aVal = aVal.toString().toLowerCase();
+                bVal = bVal.toString().toLowerCase();
+            }
+            
+            if (appState.sortState.direction === 'asc') {
+                return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+            } else {
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+            }
+        });
+    } else {
+        // Brak sortowania - przywróć oryginalną kolejność
+        appState.records.sort((a, b) => {
+            const aIndex = appState.originalRecords.findIndex(r => r.id === a.id);
+            const bIndex = appState.originalRecords.findIndex(r => r.id === b.id);
+            return aIndex - bIndex;
+        });
+    }
+    
+    // Przerenderuj tabelę
+    renderTable();
+}
+
+function updateSortIndicators() {
+    // Usuń wszystkie klasy sortowania
+    document.querySelectorAll('th.sortable').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc', 'sort-none');
+        th.classList.add('sort-none');
+    });
+    
+    // Dodaj klasę dla aktualnej kolumny sortowania
+    if (appState.sortState.column) {
+        const th = document.querySelector(`th[data-sort="${appState.sortState.column}"]`);
+        if (th) {
+            th.classList.remove('sort-none');
+            th.classList.add(appState.sortState.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
+    }
+}
+
+function initTableSorting() {
+    document.querySelectorAll('th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const column = th.dataset.sort;
+            if (column) {
+                sortTable(column);
+            }
+        });
+    });
 }
 
 // ==================== WYŚWIETLANIE ORYGINALNEJ LINII ====================
@@ -2007,7 +2810,7 @@ function showOriginalLine(record) {
 
 // ==================== MODAL EDYCJI ====================
 function openEditModal(id) {
-    const record = allData.find(r => r.id === id);
+    const record = appState.records.find(r => r.id === id);
     if (!record) {
         showNotification('Nie znaleziono rekordu', 'warning');
         return;
@@ -2215,12 +3018,8 @@ function startInlineEdit(cell, fieldName, recordId) {
         const newValue = input.value.trim();
         cell.textContent = newValue || '-';
         
-        // Update the record in allData
-        const record = allData.find(r => r.id === recordId);
-        if (record) {
-            record[fieldName] = newValue;
-            validateRecord(record);
-            
+        // Update the record using new architecture
+        if (updateRecord(recordId, fieldName, newValue)) {
             // Update validation coloring
             updateCellValidation(cell, fieldName, newValue);
             
@@ -2339,8 +3138,8 @@ function handleFormSubmit(e) {
 
     currentEditingRecord.notes = document.getElementById('editNotes').value.trim();
 
-    validateRecord(currentEditingRecord);
-    generateTableWithBackend();
+    validateRecordLocal(currentEditingRecord);
+    renderTable();
     updateStats();
     closeEditModal();
     
@@ -2349,15 +3148,28 @@ function handleFormSubmit(e) {
 
 // ==================== EKSPORT I ZAPIS ====================
 function exportData() {
-    if (allData.length === 0) {
+    if (appState.records.length === 0) {
         showNotification('Brak danych do eksportu', 'warning');
         return;
     }
 
-    showNotification('Eksportowanie przez backend...', 'info');
+    const format = document.getElementById('exportFormat').value;
+    showNotification(`Eksportowanie do ${format.toUpperCase()}...`, 'info');
 
+    // Dla formatów lokalnych (JSON, CSV) użyj funkcji lokalnej
+    if (format === 'json') {
+        exportDataLocal('json');
+        return;
+    }
+    
+    if (format === 'csv') {
+        exportDataLocal('csv');
+        return;
+    }
+
+    // Dla TSV i XLSX użyj backendu
     // Przygotuj dane w formacie oczekiwanym przez backend
-    const records = allData.map(r => ({
+    const records = appState.records.map(r => ({
         record_id: r.id,
         year: r.year,
         number: r.number,
@@ -2374,7 +3186,7 @@ function exportData() {
         original: r.original
     }));
 
-    fetch('http://127.0.0.1:5000/api/export/tsv', {
+    fetch(`http://127.0.0.1:5000/api/export/${format}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -2399,7 +3211,7 @@ function exportData() {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
         
-        showNotification(`Wyeksportowano ${allData.length} rekordów`, 'success');
+        showNotification(`Wyeksportowano ${appState.records.length} rekordów`, 'success');
     })
     .catch(error => {
         console.error('Błąd eksportu przez backend:', error);
@@ -2411,57 +3223,131 @@ function exportData() {
     });
 }
 
-async function exportDataLocal() {
+function toggleColumnSelector() {
+    const selector = document.getElementById('columnSelector');
+    selector.style.display = selector.style.display === 'none' ? 'block' : 'none';
+}
+
+function selectAllColumns() {
+    const checkboxes = document.querySelectorAll('#columnSelector input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = true);
+}
+
+function selectBasicColumns() {
+    const checkboxes = document.querySelectorAll('#columnSelector input[type="checkbox"]');
+    const basicColumns = ['id', 'year', 'number', 'surname', 'name', 'place'];
+    checkboxes.forEach(cb => {
+        cb.checked = basicColumns.includes(cb.value);
+    });
+}
+
+function getSelectedColumns() {
+    const checkboxes = document.querySelectorAll('#columnSelector input[type="checkbox"]:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function getColumnHeaders(selectedColumns) {
+    const headerMap = {
+        id: 'ID',
+        year: 'Rok',
+        number: 'Nr',
+        surname: 'Nazwisko',
+        name: 'Imię',
+        place: 'Miejscowość',
+        fatherName: 'Imię_ojca',
+        fatherSurname: 'Nazwisko_ojca',
+        fatherAge: 'Wiek_ojca',
+        motherName: 'Imię_matki',
+        motherSurname: 'Nazwisko_matki',
+        motherAge: 'Wiek_matki',
+        recordType: 'Typ_rekordu',
+        notes: 'Uwagi',
+        isModified: 'Zmodyfikowany'
+    };
+    
+    return selectedColumns.map(col => headerMap[col] || col);
+}
+
+async function exportDataLocal(format = 'tsv') {
     try {
-        showNotification('Przygotowywanie eksportu...', 'info');
-        
-        // Użyj backendu do wygenerowania TSV (te same dane co tabela 3!)
-        const response = await fetch('http://127.0.0.1:5000/api/export/tsv-backend', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                records: globalRecordsData // Dane z parsera (te same co tabela 3)
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Błąd HTTP: ${response.status}`);
+        const selectedColumns = getSelectedColumns();
+        if (selectedColumns.length === 0) {
+            showNotification('Wybierz przynajmniej jedną kolumnę do eksportu', 'error');
+            return;
         }
         
-        const tsv = await response.text();
+        showNotification(`Przygotowywanie eksportu ${format.toUpperCase()}...`, 'info');
         
-        // Pobierz TSV jako plik
-        const blob = new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8' });
+        let content = '';
+        let mimeType = '';
+        let filename = `parent-validator-export.${format}`;
+        
+        if (format === 'json') {
+            // Dla JSON eksportuj wszystkie pola
+            content = JSON.stringify(appState.records, null, 2);
+            mimeType = 'application/json';
+        } else {
+            const headers = getColumnHeaders(selectedColumns);
+            
+            if (format === 'csv') {
+                content = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+                
+                // Dane
+                appState.records.forEach(record => {
+                    const row = selectedColumns.map(col => {
+                        const value = record[col] || '';
+                        return `"${value.toString().replace(/"/g, '""')}"`;
+                    });
+                    content += row.join(',') + '\n';
+                });
+                mimeType = 'text/csv';
+            } else {
+                // TSV - domyślny format
+                content = headers.join('\t') + '\n';
+                
+                appState.records.forEach(record => {
+                    const row = selectedColumns.map(col => record[col] || '');
+                    content += row.join('\t') + '\n';
+                });
+                mimeType = 'text/tab-separated-values';
+                filename = 'parent-validator-export.tsv';
+            }
+        }
+        
+        // Pobierz plik
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `rodzice-${new Date().toISOString().slice(0,10)}.tsv`;
+        a.href = url;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+        URL.revokeObjectURL(url);
         
-        showNotification(`Wyeksportowano ${allData.length} rekordów`, 'success');
+        showNotification(`Wyeksportowano ${appState.records.length} rekordów do ${format.toUpperCase()}`, 'success');
     } catch (error) {
-        console.error('Błąd eksportu:', error);
+        console.error('Błąd lokalnego eksportu:', error);
         showNotification(`Błąd eksportu: ${error.message}`, 'error');
     }
 }
 
 function saveToLocalStorage() {
-    if (allData.length === 0) {
+    if (appState.records.length === 0) {
         showNotification('Brak danych do zapisania', 'warning');
         return;
     }
     
-    localStorage.setItem('agene_parent_data', JSON.stringify(allData));
-    showNotification(`Zapisano ${allData.length} rekordów w przeglądarce`, 'success');
+    localStorage.setItem('agene_parent_data', JSON.stringify(appState.records));
+    showNotification(`Zapisano ${appState.records.length} rekordów w przeglądarce`, 'success');
 }
 
 function clearAllData() {
     if (confirm('Czy na pewno chcesz wyczyścić WSZYSTKIE dane?\n\nTo usunie:\n- Dane w pamięci (aktualnie wyświetlone)\n- Dane zapisane w przeglądarce (localStorage)\n\nTej operacji nie można cofnąć!')) {
         // Wyczyść dane w pamięci
-        allData = [];
+        appState.records = [];
+        appState.originalRecords = [];
+        appState.session.isDirty = false;
         
         // Wyczyść localStorage
         localStorage.removeItem('agene_parent_data');
@@ -2561,6 +3447,7 @@ function selectIdColumn(colIndex, separator, dataLines) {
     if (modal) modal.remove();
     
     allData = [];
+    appState.records = [];
     
     dataLines.forEach((line, index) => {
         const fields = line.split(separator).map(f => f.trim());
@@ -2634,8 +3521,9 @@ function selectIdColumn(colIndex, separator, dataLines) {
             record.id = generateAutoId(record, index);
         }
         
-        validateRecord(record);
+        validateRecordLocal(record);
         allData.push(record);
+        appState.records.push(enrichRecordWithMetadata(record));
     });
     
     displayData();
@@ -2699,5 +3587,150 @@ function togglePanels() {
         if (bottomPanel) bottomPanel.style.display = 'block';
         if (icon) icon.textContent = 'unfold_less';
     }
+}
+
+// ==================== AUTOMATYCZNE TESTY ====================
+function runTests() {
+    console.log('🚀 Uruchamianie automatycznych testów...');
+    let passed = 0;
+    let failed = 0;
+    
+    // Test 1: updateRecord
+    try {
+        const testRecord = { id: 'TEST001', name: 'Jan', surname: 'Kowalski' };
+        appState.records = [testRecord];
+        updateRecord('TEST001', 'name', 'Janusz');
+        if (appState.records[0].name === 'Janusz') {
+            console.log('✅ Test updateRecord: PASSED');
+            passed++;
+        } else {
+            console.log('❌ Test updateRecord: FAILED');
+            failed++;
+        }
+    } catch (err) {
+        console.log('❌ Test updateRecord: ERROR -', err.message);
+        failed++;
+    }
+    
+    // Test 2: validateRecordLocal
+    try {
+        const testRecord = { 
+            id: 'TEST002', 
+            name: 'Jan', 
+            surname: 'Kowalski', 
+            fatherName: 'Józef',
+            place: 'Warszawa'
+        };
+        // Załóżmy, że nameDatabase jest załadowany
+        if (nameDatabase.allNames && nameDatabase.allNames.has('jan')) {
+            const result = validateRecordLocal(testRecord);
+            if (result && typeof result === 'object') {
+                console.log('✅ Test validateRecordLocal: PASSED');
+                passed++;
+            } else {
+                console.log('❌ Test validateRecordLocal: FAILED - nieprawidłowy wynik');
+                failed++;
+            }
+        } else {
+            console.log('⚠️ Test validateRecordLocal: SKIPPED - bazy danych nie załadowane');
+        }
+    } catch (err) {
+        console.log('❌ Test validateRecordLocal: ERROR -', err.message);
+        failed++;
+    }
+    
+    // Test 3: buildTSV (symulacja)
+    try {
+        const testRecords = [
+            { id: 'TEST003', name: 'Anna', surname: 'Nowak' },
+            { id: 'TEST004', name: 'Piotr', surname: 'Wiśniewski' }
+        ];
+        appState.records = testRecords;
+        
+        // Tymczasowo zmień funkcję aby testować
+        const originalExport = exportDataLocal;
+        let testContent = '';
+        exportDataLocal = async (format) => {
+            if (format === 'tsv') {
+                const headers = ['ID', 'Nazwisko', 'Imię'];
+                testContent = headers.join('\t') + '\n';
+                testRecords.forEach(record => {
+                    const row = [record.id, record.surname, record.name];
+                    testContent += row.join('\t') + '\n';
+                });
+            }
+        };
+        
+        exportDataLocal('tsv');
+        if (testContent.includes('TEST003') && testContent.includes('Anna')) {
+            console.log('✅ Test buildTSV: PASSED');
+            passed++;
+        } else {
+            console.log('❌ Test buildTSV: FAILED');
+            failed++;
+        }
+        
+        // Przywróć oryginalną funkcję
+        exportDataLocal = originalExport;
+    } catch (err) {
+        console.log('❌ Test buildTSV: ERROR -', err.message);
+        failed++;
+    }
+    
+    // Test 4: getSelectedColumns
+    try {
+        // Symuluj zaznaczone checkboxy
+        const mockCheckboxes = [
+            { value: 'id', checked: true },
+            { value: 'name', checked: true },
+            { value: 'surname', checked: false }
+        ];
+        
+        // Temporarily replace querySelectorAll
+        const originalQuery = document.querySelectorAll;
+        document.querySelectorAll = () => mockCheckboxes;
+        
+        const selected = getSelectedColumns();
+        if (selected.includes('id') && selected.includes('name') && !selected.includes('surname')) {
+            console.log('✅ Test getSelectedColumns: PASSED');
+            passed++;
+        } else {
+            console.log('❌ Test getSelectedColumns: FAILED');
+            failed++;
+        }
+        
+        // Przywróć oryginalną funkcję
+        document.querySelectorAll = originalQuery;
+    } catch (err) {
+        console.log('❌ Test getSelectedColumns: ERROR -', err.message);
+        failed++;
+    }
+    
+    console.log(`📊 Wyniki testów: ${passed} PASSED, ${failed} FAILED`);
+    showNotification(`Testy zakończone: ${passed} pomyślnych, ${failed} błędów`, failed > 0 ? 'warning' : 'success');
+    
+    // Benchmark wydajności
+    console.log('🏃 Benchmark wydajności...');
+    const startTime = performance.now();
+    for (let i = 0; i < 1000; i++) {
+        validateRecordLocal({ id: 'BENCH' + i, name: 'Test' });
+    }
+    const endTime = performance.now();
+    console.log(`⏱️ 1000 walidacji: ${(endTime - startTime).toFixed(2)}ms`);
+}
+
+// Dodaj przycisk testów do UI (tylko w development)
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    setTimeout(() => {
+        const testBtn = document.createElement('button');
+        testBtn.className = 'btn btn-small btn-outline';
+        testBtn.innerHTML = '<span class="material-icons">bug_report</span> Testy';
+        testBtn.onclick = runTests;
+        testBtn.style.position = 'fixed';
+        testBtn.style.bottom = '10px';
+        testBtn.style.right = '10px';
+        testBtn.style.zIndex = '1000';
+        document.body.appendChild(testBtn);
+    }, 2000);
 }
 

@@ -17,7 +17,7 @@ import re
 app = Flask(__name__)
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:8080", "http://127.0.0.1:8080", "http://localhost:5000"],
+        "origins": ["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:8080", "http://127.0.0.1:8080", "http://localhost:5000", "http://10.42.163.151:8080", "http://10.42.163.151:5000"],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type"]
     }
@@ -860,6 +860,207 @@ def validate_records():
     
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/validate-field', methods=['POST'])
+def validate_single_field():
+    """
+    Walidacja pojedynczego pola - szybka usługa dla real-time podpowiedzi
+    POST body: {
+        'fieldType': 'name|surname|place',
+        'value': 'wartość do walidacji',
+        'context': {
+            'recordType': 'baptism|death|marriage',
+            'year': 'rok rekordu (opcjonalne)'
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Brak danych JSON'}), 400
+        
+        field_type = data.get('fieldType', '').lower()
+        value = data.get('value', '').strip()
+        context = data.get('context', {})
+        record_type = context.get('recordType', 'baptism')
+        year = context.get('year')
+        
+        if not field_type or not value:
+            return jsonify({'success': False, 'error': 'Brak wymaganych pól: fieldType, value'}), 400
+        
+        # Normalizacja wartości
+        normalized_value = value.lower()
+        
+        # Wynik walidacji
+        result = {
+            'fieldType': field_type,
+            'originalValue': value,
+            'normalizedValue': normalized_value,
+            'status': 'unknown',
+            'color': 'gray',
+            'message': '',
+            'suggestions': []
+        }
+        
+        # Walidacja imion
+        if field_type == 'name':
+            if normalized_value in NAME_DATABASE['all_names']:
+                result['status'] = 'valid'
+                result['color'] = 'green'
+                result['message'] = 'Imię znalezione w bazie'
+            else:
+                result['status'] = 'invalid'
+                result['color'] = 'red'
+                result['message'] = 'Imię nie znalezione w bazie'
+                
+                # Znajdź podobne imiona (Levenshtein distance <= 2)
+                suggestions = find_similar_items(normalized_value, NAME_DATABASE['all_names'], max_distance=2)
+                if suggestions:
+                    result['suggestions'] = suggestions[:5]  # Max 5 sugestii
+                    result['message'] += f'. Sugestie: {", ".join(suggestions[:3])}'
+        
+        # Walidacja nazwisk
+        elif field_type == 'surname':
+            if normalized_value in NAME_DATABASE['all_surnames']:
+                result['status'] = 'valid'
+                result['color'] = 'green'
+                result['message'] = 'Nazwisko znalezione w bazie'
+            else:
+                result['status'] = 'invalid'
+                result['color'] = 'red'
+                result['message'] = 'Nazwisko nie znalezione w bazie'
+                
+                # Znajdź podobne nazwiska
+                suggestions = find_similar_items(normalized_value, NAME_DATABASE['all_surnames'], max_distance=2)
+                if suggestions:
+                    result['suggestions'] = suggestions[:5]
+                    result['message'] += f'. Sugestie: {", ".join(suggestions[:3])}'
+        
+        # Walidacja miejscowości
+        elif field_type == 'place':
+            if normalized_value in NAME_DATABASE['places']:
+                result['status'] = 'valid'
+                result['color'] = 'green'
+                result['message'] = 'Miejscowość znaleziona w bazie'
+            else:
+                result['status'] = 'invalid'
+                result['color'] = 'red'
+                result['message'] = 'Miejscowość nie znaleziona w bazie'
+                
+                # Znajdź podobne miejscowości
+                suggestions = find_similar_items(normalized_value, NAME_DATABASE['places'], max_distance=2)
+                if suggestions:
+                    result['suggestions'] = suggestions[:5]
+                    result['message'] += f'. Sugestie: {", ".join(suggestions[:3])}'
+        
+        # Walidacja wieku
+        elif field_type == 'age':
+            age_valid, age_message = validate_age(value, record_type, year)
+            result['status'] = 'valid' if age_valid else 'invalid'
+            result['color'] = 'green' if age_valid else 'red'
+            result['message'] = age_message
+        
+        else:
+            result['status'] = 'unknown'
+            result['color'] = 'gray'
+            result['message'] = f'Nieobsługiwany typ pola: {field_type}'
+        
+        return jsonify({
+            'success': True,
+            'validation': result
+        })
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def find_similar_items(target, item_set, max_distance=2):
+    """
+    Znajdź podobne elementy używając prostej odległości Levenshtein
+    """
+    def levenshtein_distance(s1, s2):
+        if len(s1) < len(s2):
+            return levenshtein_distance(s2, s1)
+        if len(s2) == 0:
+            return len(s1)
+        
+        previous_row = list(range(len(s2) + 1))
+        for i, c1 in enumerate(s1):
+            current_row = [i + 1]
+            for j, c2 in enumerate(s2):
+                insertions = previous_row[j + 1] + 1
+                deletions = current_row[j] + 1
+                substitutions = previous_row[j] + (c1 != c2)
+                current_row.append(min(insertions, deletions, substitutions))
+            previous_row = current_row
+        
+        return previous_row[-1]
+    
+    similar = []
+    for item in item_set:
+        distance = levenshtein_distance(target, item)
+        if distance <= max_distance and distance > 0:  # distance > 0 aby wykluczyć identyczne
+            similar.append((item, distance))
+    
+    # Sortuj po odległości, potem alfabetycznie
+    similar.sort(key=lambda x: (x[1], x[0]))
+    return [item for item, dist in similar]
+
+def validate_age(age_str, record_type='baptism', year=None):
+    """
+    Kontekstowa walidacja wieku
+    """
+    try:
+        # Parsuj wiek (obsługa formatów jak "40", "l.40", "~1801")
+        age_match = re.search(r'(\d+)', str(age_str))
+        if not age_match:
+            return False, "Nieprawidłowy format wieku"
+        
+        age = int(age_match.group(1))
+        
+        # Bazowe zakresy wiekowe
+        age_ranges = {
+            'baptism': {'father': (18, 70), 'mother': (15, 50)},  # Chrzest
+            'death': {'person': (0, 120)},  # Zgon - szeroki zakres
+            'marriage': {'person': (18, 80)}  # Małżeństwo
+        }
+        
+        # Dostosuj do epoki jeśli podano rok
+        if year:
+            try:
+                year_int = int(year)
+                # W starszych epokach oczekiwana długość życia była niższa
+                if year_int < 1800:
+                    age_ranges['death']['person'] = (0, 90)
+                elif year_int < 1900:
+                    age_ranges['death']['person'] = (0, 100)
+            except:
+                pass
+        
+        # Sprawdź zakres dla typu rekordu
+        if record_type == 'baptism':
+            # Dla chrztu sprawdzamy wiek rodziców
+            if 'father' in age_str.lower() or 'ojciec' in age_str.lower():
+                min_age, max_age = age_ranges['baptism']['father']
+            elif 'mother' in age_str.lower() or 'matka' in age_str.lower():
+                min_age, max_age = age_ranges['baptism']['mother']
+            else:
+                return False, "Dla chrztu podaj wiek ojca lub matki"
+        elif record_type == 'death':
+            min_age, max_age = age_ranges['death']['person']
+        elif record_type == 'marriage':
+            min_age, max_age = age_ranges['marriage']['person']
+        else:
+            min_age, max_age = (0, 150)  # Fallback
+        
+        if age < min_age:
+            return False, f"Wiek {age} zbyt niski (min {min_age})"
+        elif age > max_age:
+            return False, f"Wiek {age} zbyt wysoki (max {max_age})"
+        else:
+            return True, f"Wiek {age} w prawidłowym zakresie"
+            
+    except Exception as e:
+        return False, f"Błąd walidacji wieku: {str(e)}"
 
 @app.route('/api/export/<format>', methods=['POST'])
 def export_data(format):

@@ -49,6 +49,9 @@
                     <button id="parseButton" class="btn btn-info">
                         <span class="material-icons">check_circle</span> Wczytaj dane z pola
                     </button>
+                    <button class="btn btn-secondary" onclick="loadParserResults()">
+                        <span class="material-icons">science</span> Załaduj z parsera
+                    </button>
                     <button class="btn btn-outline" onclick="clearPasteArea()">
                         <span class="material-icons">clear</span> Wyczyść
                     </button>
@@ -75,19 +78,19 @@
             <table class="data-table" id="dataTable">
                 <thead>
                     <tr>
-                        <th class="col-id sticky-col">ID</th>
-                        <th class="col-year">ROK</th>
-                        <th class="col-number">Nr.</th>
-                        <th class="col-surname">Nazwisko</th>
-                        <th class="col-name">Imię</th>
-                        <th class="col-place">Miejscowość</th>
-                        <th class="col-father">ImięO</th>
-                        <th class="col-father-surname">NazwiskoO</th>
-                        <th class="col-father-age">wiekO</th>
-                        <th class="col-mother">IM</th>
-                        <th class="col-mother-surname">NM</th>
-                        <th class="col-mother-age">wM</th>
-                        <th class="col-notes">uwagi</th>
+                        <th class="col-id sticky-col sortable" data-sort="id">ID</th>
+                        <th class="col-year sortable" data-sort="year">ROK</th>
+                        <th class="col-number sortable" data-sort="number">Nr.</th>
+                        <th class="col-surname sortable" data-sort="surname">Nazwisko</th>
+                        <th class="col-name sortable" data-sort="name">Imię</th>
+                        <th class="col-place sortable" data-sort="place">Miejscowość</th>
+                        <th class="col-father sortable" data-sort="fatherName">ImięO</th>
+                        <th class="col-father-surname sortable" data-sort="fatherSurname">NazwiskoO</th>
+                        <th class="col-father-age sortable" data-sort="fatherAge">wiekO</th>
+                        <th class="col-mother sortable" data-sort="motherName">IM</th>
+                        <th class="col-mother-surname sortable" data-sort="motherSurname">NM</th>
+                        <th class="col-mother-age sortable" data-sort="motherAge">wM</th>
+                        <th class="col-notes sortable" data-sort="notes">uwagi</th>
                         <th class="col-original">UWAGI ORG</th>
                         <th class="col-actions">Akcje</th>
                     </tr>
@@ -96,6 +99,9 @@
                     <!-- Wpisywane dynamicznie -->
                 </tbody>
             </table>
+            
+            <!-- Kontrolki paginacji -->
+            <div class="pagination-container" id="paginationControls"></div>
             
             <div class="table-footer">
                 <div id="tableSummary">
@@ -145,6 +151,16 @@
             
             <div class="table-controls">
                 
+                <div class="search-group" id="searchGroup" style="display: none;">
+                    <div class="search-input-wrapper">
+                        <span class="material-icons">search</span>
+                        <input type="text" id="searchInput" placeholder="Szukaj w nazwiskach, imionach, miejscach..." class="search-input">
+                        <button class="btn btn-small" id="clearSearchBtn" title="Wyczyść wyszukiwanie">
+                            <span class="material-icons">clear</span>
+                        </button>
+                    </div>
+                </div>
+                
                 <div class="filter-group" id="filterGroup" style="display: none;">
                     <label>
                         <input type="checkbox" id="filterRed" checked> 
@@ -163,9 +179,44 @@
                     </div>
                 </div>
                 <div class="action-group" id="actionGroup" style="display: none;">
-                    <button class="btn btn-small btn-primary" id="exportBtn">
-                        <span class="material-icons">download</span> Eksportuj TSV
-                    </button>
+                    <div class="export-controls">
+                        <select id="exportFormat" class="btn btn-small">
+                            <option value="tsv">TSV</option>
+                            <option value="csv">CSV</option>
+                            <option value="json">JSON</option>
+                            <option value="xlsx">Excel</option>
+                        </select>
+                        <button class="btn btn-small btn-outline" id="columnSelectBtn" onclick="toggleColumnSelector()">
+                            <span class="material-icons">view_column</span> Kolumny
+                        </button>
+                        <button class="btn btn-small btn-primary" id="exportBtn">
+                            <span class="material-icons">download</span> Eksportuj
+                        </button>
+                    </div>
+                    <div id="columnSelector" class="column-selector" style="display: none;">
+                        <div class="column-selector-header">
+                            <span>Wybierz kolumny do eksportu:</span>
+                            <button class="btn btn-tiny" onclick="selectAllColumns()">Wszystkie</button>
+                            <button class="btn btn-tiny" onclick="selectBasicColumns()">Podstawowe</button>
+                        </div>
+                        <div class="column-checkboxes">
+                            <label><input type="checkbox" value="id" checked> ID</label>
+                            <label><input type="checkbox" value="year" checked> Rok</label>
+                            <label><input type="checkbox" value="number" checked> Nr</label>
+                            <label><input type="checkbox" value="surname" checked> Nazwisko</label>
+                            <label><input type="checkbox" value="name" checked> Imię</label>
+                            <label><input type="checkbox" value="place" checked> Miejscowość</label>
+                            <label><input type="checkbox" value="fatherName"> Imię ojca</label>
+                            <label><input type="checkbox" value="fatherSurname"> Nazwisko ojca</label>
+                            <label><input type="checkbox" value="fatherAge"> Wiek ojca</label>
+                            <label><input type="checkbox" value="motherName"> Imię matki</label>
+                            <label><input type="checkbox" value="motherSurname"> Nazwisko matki</label>
+                            <label><input type="checkbox" value="motherAge"> Wiek matki</label>
+                            <label><input type="checkbox" value="recordType"> Typ rekordu</label>
+                            <label><input type="checkbox" value="notes"> Uwagi</label>
+                            <label><input type="checkbox" value="isModified"> Zmodyfikowany</label>
+                        </div>
+                    </div>
                     <button class="btn btn-small btn-secondary" id="saveBtn">
                         <span class="material-icons">save</span> Zapisz w przeglądarce
                     </button>

@@ -43,7 +43,7 @@ timeout /t 3 /nobreak >nul
 
 REM Serwer statyczny (port 8080)
 echo 🌐 Uruchamiam Frontend Server (port 8080)...
-start "Frontend Static Server" cmd /k "cd /d "%ROOT%" && python -m http.server 8080"
+start "Frontend Static Server" cmd /k "cd /d "%ROOT%" && python -m http.server 8080 --bind 0.0.0.0"
 
 REM Poczekaj na uruchomienie serwerów
 echo ⏳ Czekam na pełne uruchomienie serwerów...
@@ -56,14 +56,20 @@ echo.
 
 powershell -Command "& {try { $null = Invoke-WebRequest -Uri 'http://localhost:5000/api/health' -TimeoutSec 10 -UseBasicParsing; Write-Host '✅ Backend OK (http://localhost:5000)' -ForegroundColor Green } catch { Write-Host '❌ Backend niedostępny' -ForegroundColor Red }}"
 
+powershell -Command "& {try { $null = Invoke-WebRequest -Uri 'http://10.42.163.151:5000/api/health' -TimeoutSec 10 -UseBasicParsing; Write-Host '✅ Backend OK (http://10.42.163.151:5000)' -ForegroundColor Green } catch { Write-Host '❌ Backend niedostępny w sieci' -ForegroundColor Yellow }}"
+
 powershell -Command "& {try { $null = Invoke-WebRequest -Uri 'http://localhost:8080/modules/data-entry/parent-validator/index.html' -TimeoutSec 10 -UseBasicParsing; Write-Host '✅ Frontend OK (http://localhost:8080)' -ForegroundColor Green } catch { Write-Host '❌ Frontend niedostępny' -ForegroundColor Yellow }}"
+
+powershell -Command "& {try { $null = Invoke-WebRequest -Uri 'http://10.42.163.151:8080/modules/data-entry/parent-validator/index.html' -TimeoutSec 10 -UseBasicParsing; Write-Host '✅ Frontend OK (http://10.42.163.151:8080)' -ForegroundColor Green } catch { Write-Host '❌ Frontend niedostępny w sieci' -ForegroundColor Yellow }}"
 
 echo.
 echo ========================================
 echo   🎉 Serwery uruchomione!
 echo ========================================
-echo 🌐 Aplikacja: http://localhost:8080/modules/data-entry/parent-validator/index.html
-echo 🔧 Backend API: http://localhost:5000/api/health
+echo 🌐 Aplikacja lokalnie: http://localhost:8080/modules/data-entry/parent-validator/index.html
+echo 🌐 Aplikacja w sieci: http://10.42.163.151:8080/modules/data-entry/parent-validator/index.html
+echo 🔧 Backend API lokalnie: http://localhost:5000/api/health
+echo 🔧 Backend API w sieci: http://10.42.163.151:5000/api/health
 echo ========================================
 echo.
 
