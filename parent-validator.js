@@ -1,5 +1,6 @@
 // ==================== ZMIENNE GLOBALNE ====================
 let allData = [];
+let globalRecordsData = []; // Surowe dane z parsera dla eksportu
 let nameDatabase = {
     maleNames: new Set(),
     femaleNames: new Set(),
@@ -82,24 +83,292 @@ function autoLoadDefaultFile() {
 }
 
 // ==================== ŁADOWANIE MODALA Z ZEWNĘTRZNEGO PLIKU ====================
+function getEditModalHtml() {
+    return `<!-- Modal edycji rekordu -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal-content modal-fullscreen">
+        <div class="modal-header">
+            <h2>Edycja rekordu <span id="modalRecordId"></span></h2>
+            <button class="close-btn" onclick="closeEditModal()" aria-label="Zamknij">×</button>
+        </div>
+        <div class="modal-body">
+            <!-- Oryginalny tekst - sticky -->
+            <div class="original-text-section">
+                <div class="section-header">
+                    <span class="material-icons">description</span>
+                    <span>ORYGINALNY TEKST (TSV)</span>
+                </div>
+                <div class="original-text-display" id="originalTextDisplay"></div>
+            </div>
+            <form id="editForm">
+                <!-- Typ rekordu (nowe pole) -->
+                <div class="field-container full-width">
+                    <label class="field-label" for="recordType">Typ rekordu</label>
+                    <select id="recordType" class="field-input" onchange="toggleSections()">
+                        <option value="baptism">Chrzest</option>
+                        <option value="death">Zgon</option>
+                        <option value="marriage">Małżeństwo</option>
+                    </select>
+                </div>
+
+                <!-- Górny pasek - metadata -->
+                <div class="top-bar">
+                    <div class="field-group">
+                        <label class="field-label" for="editYear">Rok</label>
+                        <input type="number" id="editYear" class="top-bar-input" min="1000" max="2100" required>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="editPlace">Miejscowość</label>
+                        <input type="text" id="editPlace" class="top-bar-input" required>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="editNumber">Nr aktu</label>
+                        <input type="text" id="editNumber" class="top-bar-input">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="editID">ID</label>
+                        <input type="text" id="editID" class="top-bar-input">
+                    </div>
+                </div>
+
+                <!-- Sekcja chrztu (domyślna) -->
+                <div id="baptismSection" class="section-compact child-section">
+                    <!-- Dziecko -->
+                    <h3>Dziecko</h3>
+                    <div class="row-compact">
+                        <div class="field-container">
+                            <label class="field-label" for="editSurname">Nazwisko</label>
+                            <div class="hint-source" id="hintChildSurname"></div>
+                            <input type="text" id="editSurname" class="field-input" required>
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="editName">Imię</label>
+                            <div class="hint-source" id="hintChildName"></div>
+                            <input type="text" id="editName" class="field-input" required>
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="editBirthDate">Data urodzenia</label>
+                            <input type="date" id="editBirthDate" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="editBaptismDate">Data chrztu</label>
+                            <input type="date" id="editBaptismDate" class="field-input">
+                        </div>
+                    </div>
+                    <!-- Chrzestni (nowe) -->
+                    <h4>Chrzestni</h4>
+                    <div class="row-compact">
+                        <div class="field-container">
+                            <label class="field-label" for="godfatherName">Imię ojca chrzestnego</label>
+                            <input type="text" id="godfatherName" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="godfatherSurname">Nazwisko ojca chrzestnego</label>
+                            <input type="text" id="godfatherSurname" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="godmotherName">Imię matki chrzestnej</label>
+                            <input type="text" id="godmotherName" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="godmotherSurname">Nazwisko matki chrzestnej</label>
+                            <input type="text" id="godmotherSurname" class="field-input">
+                        </div>
+                    </div>
+                    <!-- Rodzice -->
+                    <div class="parents-row">
+                        <!-- Ojciec -->
+                        <div class="parent-section father-section">
+                            <h4>Ojciec</h4>
+                            <div class="row-compact">
+                                <div class="field-container">
+                                    <label class="field-label" for="editFatherName">Imię</label>
+                                    <div class="hint-source" id="hintFatherName"></div>
+                                    <input type="text" id="editFatherName" class="field-input">
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="editFatherSurname">Nazwisko</label>
+                                    <div class="hint-source" id="hintFatherSurname"></div>
+                                    <input type="text" id="editFatherSurname" class="field-input">
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="editFatherAge">Wiek</label>
+                                    <input type="number" id="editFatherAge" class="field-input" min="0" placeholder="lata">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Matka -->
+                        <div class="parent-section mother-section">
+                            <h4>Matka</h4>
+                            <div class="row-compact">
+                                <div class="field-container">
+                                    <label class="field-label" for="editMotherName">Imię</label>
+                                    <div class="hint-source" id="hintMotherName"></div>
+                                    <input type="text" id="editMotherName" class="field-input">
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="editMotherSurname">Nazwisko panieńskie</label>
+                                    <div class="hint-source" id="hintMotherSurname"></div>
+                                    <input type="text" id="editMotherSurname" class="field-input">
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="editMotherAge">Wiek</label>
+                                    <input type="number" id="editMotherAge" class="field-input" min="0" placeholder="lata">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sekcja zgonu (ukryta domyślnie) -->
+                <div id="deathSection" class="section-compact hidden">
+                    <h3>Zmarły</h3>
+                    <div class="row-compact">
+                        <div class="field-container">
+                            <label class="field-label" for="deceasedName">Imię</label>
+                            <input type="text" id="deceasedName" class="field-input" required>
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="deceasedSurname">Nazwisko</label>
+                            <input type="text" id="deceasedSurname" class="field-input" required>
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="deceasedAge">Wiek</label>
+                            <input type="number" id="deceasedAge" class="field-input" min="0">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="deathDate">Data zgonu</label>
+                            <input type="date" id="deathDate" class="field-input">
+                        </div>
+                        <div class="field-container full-width">
+                            <label class="field-label" for="deathCause">Przyczyna śmierci</label>
+                            <textarea id="deathCause" class="field-textarea" rows="2"></textarea>
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="burialDate">Data pogrzebu</label>
+                            <input type="date" id="burialDate" class="field-input">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sekcja małżeństwa (ukryta domyślnie) -->
+                <div id="marriageSection" class="section-compact hidden">
+                    <h3>Małżeństwo</h3>
+                    <div class="parents-row"> <!-- Ponowne użycie dla małżonków -->
+                        <!-- Pan młody -->
+                        <div class="parent-section father-section">
+                            <h4>Pan młody</h4>
+                            <div class="row-compact">
+                                <div class="field-container">
+                                    <label class="field-label" for="groomName">Imię</label>
+                                    <input type="text" id="groomName" class="field-input" required>
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="groomSurname">Nazwisko</label>
+                                    <input type="text" id="groomSurname" class="field-input" required>
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="groomAge">Wiek</label>
+                                    <input type="number" id="groomAge" class="field-input" min="0">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Panna młoda -->
+                        <div class="parent-section mother-section">
+                            <h4>Panna młoda</h4>
+                            <div class="row-compact">
+                                <div class="field-container">
+                                    <label class="field-label" for="brideName">Imię</label>
+                                    <input type="text" id="brideName" class="field-input" required>
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="brideMaidenSurname">Nazwisko panieńskie</label>
+                                    <input type="text" id="brideMaidenSurname" class="field-input" required>
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="brideAge">Wiek</label>
+                                    <input type="number" id="brideAge" class="field-input" min="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row-compact">
+                        <div class="field-container">
+                            <label class="field-label" for="marriageDate">Data małżeństwa</label>
+                            <input type="date" id="marriageDate" class="field-input">
+                        </div>
+                    </div>
+                    <!-- Świadkowie (nowe) -->
+                    <h4>Świadkowie</h4>
+                    <div class="row-compact">
+                        <div class="field-container">
+                            <label class="field-label" for="witness1Name">Imię świadka 1</label>
+                            <input type="text" id="witness1Name" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="witness1Surname">Nazwisko świadka 1</label>
+                            <input type="text" id="witness1Surname" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="witness2Name">Imię świadka 2</label>
+                            <input type="text" id="witness2Name" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="witness2Surname">Nazwisko świadka 2</label>
+                            <input type="text" id="witness2Surname" class="field-input">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Uwagi (wspólne dla wszystkich) -->
+                <div class="section-notes">
+                    <div class="field-container full-width">
+                        <label class="field-label" for="editNotes">Uwagi</label>
+                        <textarea id="editNotes" class="field-textarea" rows="3" placeholder="Dodatkowe informacje..."></textarea>
+                    </div>
+                    <div class="field-container full-width">
+                        <label class="field-label" for="editOriginalNotes">Oryginalne dane</label>
+                        <textarea id="editOriginalNotes" class="field-textarea" rows="2" readonly placeholder="Oryginalne dane (tylko do odczytu)"></textarea>
+                    </div>
+                </div>
+
+                <!-- Przyciski akcji -->
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <span class="material-icons">save</span> Zapisz
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">
+                        <span class="material-icons">close</span> Anuluj
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Przykładowy JS do togglingu sekcji (dodaj do swojego skryptu) -->
+<script>
+    function toggleSections() {
+        const type = document.getElementById('recordType').value;
+        document.getElementById('baptismSection').classList.toggle('hidden', type !== 'baptism');
+        document.getElementById('deathSection').classList.toggle('hidden', type !== 'death');
+        document.getElementById('marriageSection').classList.toggle('hidden', type !== 'marriage');
+    }
+</script>`;
+}
+
+// ==================== ŁADOWANIE MODALA Z ZEWNĘTRZNEGO PLIKU ====================
 function loadEditModal() {
-    return fetch('edit-modal.html')
-        .then(response => response.text())
-        .then(html => {
-            document.getElementById('modalContainer').innerHTML = html;
-            console.log('Modal edycji załadowany z edit-modal.html');
-        })
-        .catch(err => {
-            console.error('Błąd ładowania modala:', err);
-            // Fallback: wstrzyknij modal inline, aby UI działał offline/bez serwera plików
-            const container = document.getElementById('modalContainer');
-            if (container) {
-                container.innerHTML = getEditModalFallbackHtml();
-                showNotification('Załadowano modal z fallbacku (brak pliku edit-modal.html)', 'warning');
-            } else {
-                showNotification('Błąd ładowania modala edycji', 'error');
-            }
-        });
+    // Bezpośrednie wstawienie HTML modala zamiast fetch
+    const container = document.getElementById('modalContainer');
+    if (container) {
+        container.innerHTML = getEditModalHtml();
+        console.log('Modal edycji załadowany inline');
+        return Promise.resolve();
+    } else {
+        console.error('Brak elementu modalContainer');
+        return Promise.reject(new Error('Brak modalContainer'));
+    }
 }
 
 // Fallback HTML modala (gdy fetch edit-modal.html się nie powiedzie)
@@ -222,7 +491,7 @@ function loadNameDatabase() {
     const keys = ['maleNames', 'femaleNames', 'allNames', 'maleSurnames', 'femaleSurnames', 'allSurnames'];
 
     files.forEach((file, i) => {
-        fetch(`../../../data/${file}`)
+        fetch(`data/${file}`)
             .then(r => r.ok ? r.json() : [])
             .then(data => {
                 if (Array.isArray(data)) {
@@ -232,6 +501,17 @@ function loadNameDatabase() {
             })
             .catch(err => console.warn(`Błąd ładowania ${file}:`, err));
     });
+    
+    // Load places database
+    fetch('data/places.json')
+        .then(r => r.ok ? r.json() : [])
+        .then(data => {
+            if (Array.isArray(data)) {
+                nameDatabase.places = new Set(data.map(item => item.trim().toLowerCase()));
+                console.log(`Załadowano places: ${data.length} elementów`);
+            }
+        })
+        .catch(err => console.warn('Błąd ładowania places.json:', err));
 }
 
 // ==================== EVENT LISTENERS ====================
@@ -685,7 +965,8 @@ async function loadParserResults() {
             motherMaidenNameValidated: false
         }));
         
-        allData.forEach(validateRecord);
+        // Walidacja przez backend zamiast lokalnej
+        await validateWithBackend(allData);
         displayData();
         showNotification(`Załadowano ${allData.length} rekordów z parsera`, 'success');
     } catch (err) {
@@ -717,6 +998,7 @@ async function parseDataWithFormatDetection(content, separator = '\t') {
             const result = await response.json();
             if (result.success && result.records) {
                 console.log('✅ Parsowanie przez Python backend', result.records.length, 'rekordów');
+                globalRecordsData = result.records; // Zapisz surowe dane dla eksportu
                 allData = result.records.map(r => ({
                     id: r.record_id || '',
                     surname: r.parent_data?.surname || r.parent_data?.father_surname || '',
@@ -918,6 +1200,51 @@ async function generateTableWithBackend() {
     }
 }
 
+// ==================== WALIDACJA PRZEZ BACKEND ====================
+async function validateWithBackend(records) {
+    try {
+        console.log('validateWithBackend: Wysyłanie danych do walidacji przez backend...');
+        
+        const response = await fetch('http://127.0.0.1:5000/api/validate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                records: records
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Błąd walidacji');
+        }
+        
+        // Zaktualizuj rekordy z wynikami walidacji
+        result.records.forEach((validatedRecord, index) => {
+            if (records[index]) {
+                records[index] = {
+                    ...records[index],
+                    ...validatedRecord
+                };
+            }
+        });
+        
+        console.log('validateWithBackend: Walidacja zakończona pomyślnie');
+        
+    } catch (error) {
+        console.error('Błąd walidacji przez backend:', error);
+        // Fallback: użyj lokalnej walidacji
+        console.log('validateWithBackend: Używam lokalnej walidacji...');
+        records.forEach(validateRecord);
+    }
+}
+
 // ==================== PARSOWANIE PRZEZ BACKEND ====================
 async function parseDataWithBackend(dataLines, separator) {
     try {
@@ -943,6 +1270,9 @@ async function parseDataWithBackend(dataLines, separator) {
         if (!result.success) {
             throw new Error(result.error || 'Błąd parsowania');
         }
+        
+        // Zapisz surowe dane dla eksportu
+        globalRecordsData = result.records;
         
         // Konwertuj wyniki backendu na format aplikacji
         allData = result.records.map(r => ({
@@ -1001,9 +1331,10 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
     dataLines.forEach((line, index) => {
         const fields = line.split(separator).map(f => f.trim());
         
-        // DEBUG - pokaż pierwsze 3 linie
+        // DEBUG - pokaż pierwsze 3 linie ze szczegółami parsowania
         if (index < 3) {
             console.log(`Linia ${index}: ${fields.length} pól`, fields);
+            console.log(`  Parsowanie: ID=${recordId}, Rok=${record.year}, Nr=${record.number}, Nazwisko=${record.surname}, Imię=${record.name}, Miejscowość=${record.place}`);
         }
         
         let record;
@@ -1181,6 +1512,7 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
             // Pierwsze dwa pola tekstowe to nazwisko i imię
             if (textFields.length >= 1) surnameValue = textFields[0].value;
             if (textFields.length >= 2) nameValue = textFields[1].value;
+            if (textFields.length >= 3) placeValue = textFields[2].value; // Trzecie pole jako miejsce
             
             record = {
                 id: idValue || generateAutoId({ surname: surnameValue, name: nameValue, year: yearValue }, index),
@@ -1188,7 +1520,7 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
                 name: nameValue,
                 number: numberValue,
                 year: yearValue,
-                place: '',
+                place: placeValue,
                 fatherName: '',
                 fatherSurname: '',
                 motherName: '',
@@ -1335,26 +1667,76 @@ function parseGenealogicalData(text) {
 
 // ==================== WALIDACJA ====================
 function validateRecord(record) {
-    const checkName = (name) => {
+    const checkName = (name, type = 'all') => {
         if (!name || name.toLowerCase() === 'x' || name === '?') return false;
-        return nameDatabase.allNames.has(name.toLowerCase());
+        
+        if (type === 'male' && nameDatabase.maleNames.has(name.toLowerCase())) return true;
+        if (type === 'female' && nameDatabase.femaleNames.has(name.toLowerCase())) return true;
+        if (nameDatabase.allNames.has(name.toLowerCase())) return true;
+        
+        return false;
     };
     
     const checkSurname = (surname, type = 'all') => {
         if (!surname || surname.toLowerCase() === 'x' || surname === '?') return false;
         
-        if (type === 'male' && nameDatabase.maleSurnames.has(surname.toLowerCase())) return true;
-        if (type === 'female' && nameDatabase.femaleSurnames.has(surname.toLowerCase())) return true;
-        if (nameDatabase.allSurnames.has(surname.toLowerCase())) return true;
+        // Dla rodziców: TYLKO nazwiska płciowe (męskie dla ojca, żeńskie dla matki)
+        if (type === 'male') return nameDatabase.maleSurnames.has(surname.toLowerCase());
+        if (type === 'female') return nameDatabase.femaleSurnames.has(surname.toLowerCase());
         
-        return false;
+        // Dla dziecka: wszystkie nazwiska
+        return nameDatabase.allSurnames.has(surname.toLowerCase());
     };
     
-    record.fatherNameValidated = checkName(record.fatherName);
-    record.motherNameValidated = checkName(record.motherName);
+    const checkPlace = (place) => {
+        if (!place || place.toLowerCase() === 'x' || place === '?' || place.toLowerCase() === 'b.d.' || place.toLowerCase() === 'bez danych') return false;
+        return nameDatabase.places && nameDatabase.places.has(place.toLowerCase());
+    };
+    
+    const checkAge = (ageStr) => {
+        if (!ageStr || ageStr.trim() === '' || ageStr === '-') return null; // Brak danych
+        
+        try {
+            const ageClean = ageStr.replace('l.', '').trim();
+            const age = parseInt(ageClean);
+            
+            // Sprawdzone przedziały wiekowe dla rodziców w XIX wieku
+            if (14 <= age <= 70) {
+                return true;
+            } else {
+                return false;
+            }
+        } catch (e) {
+            return false; // Niepoprawny format
+        }
+    };
+    
+    record.fatherNameValidated = checkName(record.fatherName, 'male');
+    record.motherNameValidated = checkName(record.motherName, 'female');
     record.fatherSurnameValidated = checkSurname(record.fatherSurname, 'male');
     record.motherSurnameValidated = checkSurname(record.motherSurname, 'female');
     record.motherMaidenNameValidated = checkSurname(record.motherMaidenName, 'female');
+    record.placeValidated = checkPlace(record.place);
+    record.fatherAgeValidated = checkAge(record.fatherAge);
+    record.motherAgeValidated = checkAge(record.motherAge);
+}
+
+function validateAge(ageStr) {
+    if (!ageStr || ageStr.trim() === '' || ageStr === '-') return null; // Brak danych
+    
+    try {
+        const ageClean = ageStr.replace('l.', '').trim();
+        const age = parseInt(ageClean);
+        
+        // Sprawdzone przedziały wiekowe dla rodziców w XIX wieku
+        if (14 <= age <= 70) {
+            return true;
+        } else {
+            return false;
+        }
+    } catch (e) {
+        return false; // Niepoprawny format
+    }
 }
 
 function getRecordStatus(record) {
@@ -1400,6 +1782,8 @@ function updateTableDisplay() {
     const showRed = document.getElementById('filterRed').checked;
     const showGreen = document.getElementById('filterGreen').checked;
     const showGray = document.getElementById('filterGray').checked;
+    
+    console.log('🔍 updateTableDisplay: places database loaded:', !!nameDatabase.places, 'size:', nameDatabase.places?.size);
 
     allData.forEach(record => {
         const status = getRecordStatus(record);
@@ -1415,7 +1799,7 @@ function createTableRow(record, status) {
     const tr = document.createElement('tr');
 
     // Pełna struktura kolumn: ID, ROK, Nr., Nazwisko, Imię, Miejscowość, ImięO, NazwiskoO, wiekO, IM, NM, wM, uwagi, UWAGI ORG, Akcje
-    // UWAGI ORG - cała oryginalna linia TSV z | jako separator (dla parsera)
+    // UWAGI ORG - cała oryginalna linia z ⁂ jako separator
     const originalLine = [
         record.id,
         record.year || '',
@@ -1430,7 +1814,7 @@ function createTableRow(record, status) {
         record.motherSurname || '',
         record.motherAge || '',
         record.notes || ''
-    ].join('|');
+    ].join('⁂');
     
     const cells = [
         record.id,
@@ -1487,10 +1871,42 @@ function createTableRow(record, status) {
                     td.classList.add('cell-not-found');
                     console.log('❌ Imię dziecka BRAK:', record.name);
                 }
+            } else if (i === 5) {  // Miejscowość (Place)
+                if (!record.place || record.place === '-') {
+                    td.classList.add('text-empty');
+                } else if (nameDatabase.places && nameDatabase.places.has(record.place.toLowerCase().trim())) {
+                    td.classList.add('text-validated');
+                    console.log('✅ Miejscowość w bazie:', record.place);
+                } else {
+                    td.classList.add('cell-not-found');
+                    console.log('❌ Miejscowość BRAK:', record.place, 'Database loaded:', !!nameDatabase.places, 'Size:', nameDatabase.places?.size);
+                }
+            } else if (i === 8) {  // wiekO (Father Age)
+                if (!record.fatherAge || record.fatherAge === '-') {
+                    td.classList.add('text-empty');
+                } else {
+                    const ageValid = validateAge(record.fatherAge);
+                    if (ageValid === true) {
+                        td.classList.add('text-validated');
+                    } else if (ageValid === false) {
+                        td.classList.add('cell-not-found');
+                    }
+                }
+            } else if (i === 11) {  // wM (Mother Age)
+                if (!record.motherAge || record.motherAge === '-') {
+                    td.classList.add('text-empty');
+                } else {
+                    const ageValid = validateAge(record.motherAge);
+                    if (ageValid === true) {
+                        td.classList.add('text-validated');
+                    } else if (ageValid === false) {
+                        td.classList.add('cell-not-found');
+                    }
+                }
             } else if (i === 6) {  // ImięO (Father Name)
                 if (!record.fatherName || record.fatherName === '-') {
                     td.classList.add('text-empty');
-                } else if (nameDatabase.allNames && nameDatabase.allNames.has(record.fatherName.toLowerCase())) {
+                } else if (nameDatabase.maleNames && nameDatabase.maleNames.has(record.fatherName.toLowerCase())) {
                     td.classList.add('text-validated');
                 } else {
                     td.classList.add('cell-not-found');
@@ -1498,7 +1914,7 @@ function createTableRow(record, status) {
             } else if (i === 7) {  // NazwiskoO (Father Surname)
                 if (!record.fatherSurname || record.fatherSurname === '-') {
                     td.classList.add('text-empty');
-                } else if (nameDatabase.allSurnames && nameDatabase.allSurnames.has(record.fatherSurname.toLowerCase())) {
+                } else if (nameDatabase.maleSurnames && nameDatabase.maleSurnames.has(record.fatherSurname.toLowerCase())) {
                     td.classList.add('text-validated');
                 } else {
                     td.classList.add('cell-not-found');
@@ -1506,7 +1922,7 @@ function createTableRow(record, status) {
             } else if (i === 9) {  // IM (Mother Name)
                 if (!record.motherName || record.motherName === '-') {
                     td.classList.add('text-empty');
-                } else if (nameDatabase.allNames && nameDatabase.allNames.has(record.motherName.toLowerCase())) {
+                } else if (nameDatabase.femaleNames && nameDatabase.femaleNames.has(record.motherName.toLowerCase())) {
                     td.classList.add('text-validated');
                 } else {
                     td.classList.add('cell-not-found');
@@ -1514,7 +1930,7 @@ function createTableRow(record, status) {
             } else if (i === 10) {  // NM (Mother Surname)
                 if (!record.motherSurname || record.motherSurname === '-') {
                     td.classList.add('text-empty');
-                } else if (nameDatabase.allSurnames && nameDatabase.allSurnames.has(record.motherSurname.toLowerCase())) {
+                } else if (nameDatabase.femaleSurnames && nameDatabase.femaleSurnames.has(record.motherSurname.toLowerCase())) {
                     td.classList.add('text-validated');
                 } else {
                     td.classList.add('cell-not-found');
@@ -1577,7 +1993,6 @@ function updateStats() {
 // ==================== WYŚWIETLANIE ORYGINALNEJ LINII ====================
 function showOriginalLine(record) {
     const displayDiv = document.getElementById('originalLineDisplay');
-    const recordIdSpan = document.getElementById('displayedRecordId');
     const contentDiv = document.getElementById('originalLineContent');
     
     if (!displayDiv || !contentDiv) return;
@@ -1585,36 +2000,9 @@ function showOriginalLine(record) {
     // Pokaż okienko
     displayDiv.style.display = 'block';
     
-    // Ustaw ID rekordu
-    if (recordIdSpan) {
-        recordIdSpan.textContent = record.id || '';
-    }
-    
-    // Ustaw oryginalną linię
-    // Jeśli jest pole 'original', użyj go; w przeciwnym razie zbuduj z pól
-    let originalLine = record.original;
-    if (!originalLine || originalLine.trim() === '') {
-        // Zbuduj linię z dostępnych pól
-        originalLine = [
-            record.id,
-            record.year,
-            record.number,
-            record.surname,
-            record.name,
-            record.place,
-            record.fatherName,
-            record.fatherSurname,
-            record.fatherAge,
-            record.motherName,
-            record.motherSurname,
-            record.motherAge,
-            record.notes,
-            record.originalNotes || ''
-        ].join('\t');
-    }
-    
-    // Ustaw tekst bez dodatkowych białych znaków
-    contentDiv.textContent = originalLine.replace(/^\s+|\s+$/g, '');
+    // Wyświetl surową oryginalną linię z pliku (bez przetwarzania)
+    // Dzięki temu widzimy dokładnie to co było w danych wejściowych
+    contentDiv.textContent = record.original || '';
 }
 
 // ==================== MODAL EDYCJI ====================
@@ -1633,11 +2021,18 @@ function openEditModal(id) {
         originalTextDisplay.textContent = record.original || '';
     }
 
+    // Ustaw typ rekordu (domyślnie baptism)
+    document.getElementById('recordType').value = record.recordType || 'baptism';
+
     // Wypełnij dane dziecka
     document.getElementById('editID').value = record.id || '';
     document.getElementById('editYear').value = record.year || '';
     document.getElementById('editNumber').value = record.number || '';
-    document.getElementById('editPlace').value = record.place || '';
+    
+    // Miejscowość
+    const editPlace = document.getElementById('editPlace');
+    editPlace.value = record.place || '';
+    updateFieldValidation(editPlace, record.place, 'place');
     
     // Dziecko - surname
     const editSurname = document.getElementById('editSurname');
@@ -1650,6 +2045,14 @@ function openEditModal(id) {
     editName.value = record.name || '';
     updateFieldValidation(editName, record.name, 'name');
     showHintSource('hintChildName', record.name || '');
+
+    // Nowe pola dla chrztu
+    document.getElementById('editBirthDate').value = record.birthDate || '';
+    document.getElementById('editBaptismDate').value = record.baptismDate || '';
+    document.getElementById('godfatherName').value = record.godfatherName || '';
+    document.getElementById('godfatherSurname').value = record.godfatherSurname || '';
+    document.getElementById('godmotherName').value = record.godmotherName || '';
+    document.getElementById('godmotherSurname').value = record.godmotherSurname || '';
 
     // Ojciec - name
     const editFatherName = document.getElementById('editFatherName');
@@ -1687,9 +2090,33 @@ function openEditModal(id) {
     // Matka - age
     document.getElementById('editMotherAge').value = record.motherAge || '';
 
+    // Pola dla zgonu
+    document.getElementById('deceasedName').value = record.deceasedName || '';
+    document.getElementById('deceasedSurname').value = record.deceasedSurname || '';
+    document.getElementById('deceasedAge').value = record.deceasedAge || '';
+    document.getElementById('deathDate').value = record.deathDate || '';
+    document.getElementById('deathCause').value = record.deathCause || '';
+    document.getElementById('burialDate').value = record.burialDate || '';
+
+    // Pola dla małżeństwa
+    document.getElementById('groomName').value = record.groomName || '';
+    document.getElementById('groomSurname').value = record.groomSurname || '';
+    document.getElementById('groomAge').value = record.groomAge || '';
+    document.getElementById('brideName').value = record.brideName || '';
+    document.getElementById('brideMaidenSurname').value = record.brideMaidenSurname || '';
+    document.getElementById('brideAge').value = record.brideAge || '';
+    document.getElementById('marriageDate').value = record.marriageDate || '';
+    document.getElementById('witness1Name').value = record.witness1Name || '';
+    document.getElementById('witness1Surname').value = record.witness1Surname || '';
+    document.getElementById('witness2Name').value = record.witness2Name || '';
+    document.getElementById('witness2Surname').value = record.witness2Surname || '';
+
     // Uwagi
     document.getElementById('editNotes').value = record.notes || '';
     document.getElementById('editOriginalNotes').value = record.original || '';
+    
+    // Przełącz sekcje na podstawie typu
+    toggleSections();
     
     // Pokaż modal
     document.getElementById('modalRecordId').textContent = id;
@@ -1716,6 +2143,11 @@ function updateFieldValidation(input, value, fieldType) {
         isValid = nameDatabase.allSurnames && nameDatabase.allSurnames.has(normalizedValue);
     } else if (fieldType.includes('Name') || fieldType === 'name') {
         isValid = nameDatabase.allNames && nameDatabase.allNames.has(normalizedValue);
+    } else if (fieldType === 'place') {
+        isValid = nameDatabase.places && nameDatabase.places.has(normalizedValue);
+    } else if (fieldType === 'age') {
+        const ageValid = validateAge(value);
+        isValid = ageValid === true;
     }
     
     if (isValid) {
@@ -1743,8 +2175,104 @@ function closeEditModal() {
     currentEditingRecord = null;
 }
 
-// ==================== KAFELKI DANYCH - DRAG & DROP (USUNIĘTE) ====================
-// Stare funkcje displayOriginalLine, renderDataTiles, initializeDropZones, populateIDSelects zostały zastąpione przez Token Mapper
+// Funkcja do przełączania sekcji w zależności od typu rekordu
+function toggleSections() {
+    const type = document.getElementById('recordType').value;
+    document.getElementById('baptismSection').classList.toggle('hidden', type !== 'baptism');
+    document.getElementById('deathSection').classList.toggle('hidden', type !== 'death');
+    document.getElementById('marriageSection').classList.toggle('hidden', type !== 'marriage');
+}
+
+// ==================== DIRECT TABLE EDITING ====================
+function makeCellEditable(cell, fieldName, recordId) {
+    if (cell.classList.contains('cell-editable')) {
+        cell.onclick = function(e) {
+            e.stopPropagation(); // Prevent modal opening
+            startInlineEdit(cell, fieldName, recordId);
+        };
+    }
+}
+
+function startInlineEdit(cell, fieldName, recordId) {
+    const currentValue = cell.textContent.trim();
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentValue;
+    input.className = 'inline-edit-input';
+    
+    // Style the input to match the cell
+    input.style.width = '100%';
+    input.style.border = '1px solid #007acc';
+    input.style.padding = '2px';
+    input.style.fontSize = '12px';
+    
+    cell.innerHTML = '';
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+    
+    function saveEdit() {
+        const newValue = input.value.trim();
+        cell.textContent = newValue || '-';
+        
+        // Update the record in allData
+        const record = allData.find(r => r.id === recordId);
+        if (record) {
+            record[fieldName] = newValue;
+            validateRecord(record);
+            
+            // Update validation coloring
+            updateCellValidation(cell, fieldName, newValue);
+            
+            // Update stats
+            updateStats();
+        }
+    }
+    
+    function cancelEdit() {
+        cell.textContent = currentValue || '-';
+    }
+    
+    input.onblur = saveEdit;
+    input.onkeydown = function(e) {
+        if (e.key === 'Enter') {
+            saveEdit();
+        } else if (e.key === 'Escape') {
+            cancelEdit();
+        }
+    };
+}
+
+function updateCellValidation(cell, fieldName, value) {
+    // Remove existing validation classes
+    cell.classList.remove('text-validated', 'cell-not-found', 'text-empty');
+    
+    if (!value || value === '-') {
+        cell.classList.add('text-empty');
+        return;
+    }
+    
+    // Apply validation logic
+    let isValid = false;
+    const normalizedValue = value.trim().toLowerCase();
+    
+    if (fieldName.includes('Surname')) {
+        isValid = nameDatabase.allSurnames && nameDatabase.allSurnames.has(normalizedValue);
+    } else if (fieldName.includes('Name') || fieldName === 'name') {
+        isValid = nameDatabase.allNames && nameDatabase.allNames.has(normalizedValue);
+    } else if (fieldName === 'place') {
+        isValid = nameDatabase.places && nameDatabase.places.has(normalizedValue);
+    } else if (fieldName.includes('Age')) {
+        const ageValid = validateAge(value);
+        isValid = ageValid === true;
+    }
+    
+    if (isValid) {
+        cell.classList.add('text-validated');
+    } else if (value.trim().length > 0) {
+        cell.classList.add('cell-not-found');
+    }
+}
 
 function escapeHtml(text) {
     const map = {
@@ -1761,12 +2289,23 @@ function handleFormSubmit(e) {
     e.preventDefault();
     if (!currentEditingRecord) return;
 
+    // Zapisz typ rekordu
+    currentEditingRecord.recordType = document.getElementById('recordType').value;
+
     // Zapisz wszystkie dane dziecka
     currentEditingRecord.year = document.getElementById('editYear').value.trim();
     currentEditingRecord.number = document.getElementById('editNumber').value.trim();
     currentEditingRecord.surname = document.getElementById('editSurname').value.trim();
     currentEditingRecord.name = document.getElementById('editName').value.trim();
     currentEditingRecord.place = document.getElementById('editPlace').value.trim();
+
+    // Nowe pola chrztu
+    currentEditingRecord.birthDate = document.getElementById('editBirthDate').value.trim();
+    currentEditingRecord.baptismDate = document.getElementById('editBaptismDate').value.trim();
+    currentEditingRecord.godfatherName = document.getElementById('godfatherName').value.trim();
+    currentEditingRecord.godfatherSurname = document.getElementById('godfatherSurname').value.trim();
+    currentEditingRecord.godmotherName = document.getElementById('godmotherName').value.trim();
+    currentEditingRecord.godmotherSurname = document.getElementById('godmotherSurname').value.trim();
 
     // Zapisz dane rodziców
     currentEditingRecord.fatherName = document.getElementById('editFatherName').value.trim();
@@ -1776,6 +2315,28 @@ function handleFormSubmit(e) {
     currentEditingRecord.motherSurname = document.getElementById('editMotherSurname').value.trim();
     currentEditingRecord.motherAge = document.getElementById('editMotherAge').value.trim();
     currentEditingRecord.motherMaidenName = document.getElementById('editMotherSurname').value.trim();
+
+    // Pola dla zgonu
+    currentEditingRecord.deceasedName = document.getElementById('deceasedName').value.trim();
+    currentEditingRecord.deceasedSurname = document.getElementById('deceasedSurname').value.trim();
+    currentEditingRecord.deceasedAge = document.getElementById('deceasedAge').value.trim();
+    currentEditingRecord.deathDate = document.getElementById('deathDate').value.trim();
+    currentEditingRecord.deathCause = document.getElementById('deathCause').value.trim();
+    currentEditingRecord.burialDate = document.getElementById('burialDate').value.trim();
+
+    // Pola dla małżeństwa
+    currentEditingRecord.groomName = document.getElementById('groomName').value.trim();
+    currentEditingRecord.groomSurname = document.getElementById('groomSurname').value.trim();
+    currentEditingRecord.groomAge = document.getElementById('groomAge').value.trim();
+    currentEditingRecord.brideName = document.getElementById('brideName').value.trim();
+    currentEditingRecord.brideMaidenSurname = document.getElementById('brideMaidenSurname').value.trim();
+    currentEditingRecord.brideAge = document.getElementById('brideAge').value.trim();
+    currentEditingRecord.marriageDate = document.getElementById('marriageDate').value.trim();
+    currentEditingRecord.witness1Name = document.getElementById('witness1Name').value.trim();
+    currentEditingRecord.witness1Surname = document.getElementById('witness1Surname').value.trim();
+    currentEditingRecord.witness2Name = document.getElementById('witness2Name').value.trim();
+    currentEditingRecord.witness2Surname = document.getElementById('witness2Surname').value.trim();
+
     currentEditingRecord.notes = document.getElementById('editNotes').value.trim();
 
     validateRecord(currentEditingRecord);
@@ -1850,39 +2411,41 @@ function exportData() {
     });
 }
 
-function exportDataLocal() {
-    const headers = ['ID', 'ROK', 'Nr', 'Nazwisko', 'Imię', 'Miejscowość', 'ImięO', 'NazwiskoO', 'wiekO', 'IM', 'NM', 'wM', 'uwagi', 'UWAGI ORG'];
-    const rows = allData.map(r => [
-        r.id,
-        r.year,
-        r.number,
-        r.surname,
-        r.name,
-        r.place,
-        r.fatherName,
-        r.fatherSurname,
-        r.fatherAge,
-        r.motherName,
-        r.motherSurname,
-        r.motherAge,
-        r.notes,
-        r.original
-    ]);
-
-    let tsv = headers.join('\t') + '\n';
-    rows.forEach(row => {
-        tsv += row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join('\t') + '\n';
-    });
-
-    const blob = new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `rodzice-${new Date().toISOString().slice(0,10)}.tsv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    
-    showNotification(`Wyeksportowano ${allData.length} rekordów (lokalnie)`, 'success');
+async function exportDataLocal() {
+    try {
+        showNotification('Przygotowywanie eksportu...', 'info');
+        
+        // Użyj backendu do wygenerowania TSV (te same dane co tabela 3!)
+        const response = await fetch('http://127.0.0.1:5000/api/export/tsv-backend', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                records: globalRecordsData // Dane z parsera (te same co tabela 3)
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+        
+        const tsv = await response.text();
+        
+        // Pobierz TSV jako plik
+        const blob = new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `rodzice-${new Date().toISOString().slice(0,10)}.tsv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        showNotification(`Wyeksportowano ${allData.length} rekordów`, 'success');
+    } catch (error) {
+        console.error('Błąd eksportu:', error);
+        showNotification(`Błąd eksportu: ${error.message}`, 'error');
+    }
 }
 
 function saveToLocalStorage() {

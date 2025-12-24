@@ -46,20 +46,21 @@ NAME_DATABASE = {
     'all_names': set(),
     'male_surnames': set(),
     'female_surnames': set(),
-    'all_surnames': set()
+    'all_surnames': set(),
+    'places': set()
 }
 
 def load_name_databases():
-    """Załaduj bazy imion i nazwisk"""
+    """Załaduj bazy imion, nazwisk i miejscowości"""
     global NAME_DATABASE
     
     data_files = {
-        'male_names': '../../../data/imiona_meskie.json',
-        'female_names': '../../../data/imiona_zenskie.json',
-        'all_names': '../../../data/imiona_wszystkie.json',
-        'male_surnames': '../../../data/nazwiska_meskie.json',
-        'female_surnames': '../../../data/nazwiska_zenskie.json',
-        'all_surnames': '../../../data/nazwiska_wszystkie.json'
+        'male_names': 'data/imiona_meskie.json',
+        'female_names': 'data/imiona_zenskie.json',
+        'all_names': 'data/imiona_wszystkie.json',
+        'male_surnames': 'data/nazwiska_meskie.json',
+        'female_surnames': 'data/nazwiska_zenskie.json',
+        'all_surnames': 'data/nazwiska_wszystkie.json'
     }
     
     for key, path in data_files.items():
@@ -67,10 +68,25 @@ def load_name_databases():
         try:
             with open(full_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                NAME_DATABASE[key] = set(data) if isinstance(data, list) else set(data.keys())
+                # Convert to lowercase for case-insensitive matching
+                if isinstance(data, list):
+                    NAME_DATABASE[key] = set(name.lower() for name in data)
+                else:
+                    NAME_DATABASE[key] = set(key.lower() for key in data.keys())
                 print(f"✓ Załadowano {len(NAME_DATABASE[key])} {key}")
         except Exception as e:
             print(f"⚠ Nie udało się załadować {key}: {e}")
+    
+    # Load places database
+    places_path = os.path.join(DATA_DIR, 'data', 'places.json')
+    try:
+        with open(places_path, 'r', encoding='utf-8') as f:
+            places_data = json.load(f)
+            NAME_DATABASE['places'] = set(place.lower() for place in places_data)
+            print(f"✓ Załadowano {len(NAME_DATABASE['places'])} miejscowości")
+    except Exception as e:
+        print(f"⚠ Nie udało się załadować places: {e}")
+        NAME_DATABASE['places'] = set()
 
 def parse_data_local(data_lines, separator='\t'):
     """
@@ -85,6 +101,13 @@ def parse_data_local(data_lines, separator='\t'):
         # Pomiń puste linie
         if not any(fields):
             continue
+        
+        # Pomiń linię nagłówkową (jeśli pierwsza kolumna to "ID" i druga to "ROK" lub "Imię")
+        if index == 0 and fields[0].upper() == 'ID':
+            # Sprawdź czy to nagłówek (druga kolumna zawiera nazwę pola zamiast wartości)
+            if len(fields) > 1 and (fields[1].upper() in ['ROK', 'IMIĘ', 'IMIE', 'NAZWISKO']):
+                print(f"⚠ Pominięto linię nagłówkową: {line[:100]}")
+                continue
             
         record_id = fields[0] if len(fields) > 0 else f'auto_{index}'
         field_count = len(fields)
@@ -224,23 +247,92 @@ def parse_data_local(data_lines, separator='\t'):
                         break
             
             # Pierwsze dwa pola tekstowe to nazwisko i imię
+            surname_value = ''
+            name_value = ''
+            place_value = ''
+            
             if text_fields:
                 surname_value = text_fields[0]['value']
-            if len(text_fields) > 1:
-                name_value = text_fields[1]['value']
+                if len(text_fields) > 1:
+                    name_value = text_fields[1]['value']
+                if len(text_fields) > 2:
+                    place_value = text_fields[2]['value']  # Trzecie pole tekstowe jako miejsce
             
             record.update({
                 'surname': surname_value,
                 'name': name_value,
                 'number': number_value,
-                'year': year_value
+                'year': year_value,
+                'place': place_value  # Teraz miejsce jest ustawiane dla krótkich rekordów
             })
+        
+        # Generuj sformatowane uwagi ZAWSZE (rozszerz istniejące jeśli są)
+        existing_notes = record.get('notes', '').strip()
+        formatted_notes = build_formatted_notes(record)
+        
+        if formatted_notes:
+            if existing_notes and existing_notes != '-':
+                # Dodaj istniejące uwagi na końcu jeśli się różnią
+                if existing_notes not in formatted_notes:
+                    record['notes'] = f"{formatted_notes}. {existing_notes}"
+                else:
+                    record['notes'] = formatted_notes
+            else:
+                record['notes'] = formatted_notes
         
         # Walidacja rekordu
         validate_record_local(record)
         records.append(record)
     
     return records
+
+def build_formatted_notes(record):
+    """
+    Buduje sformatowane uwagi w stylu: 
+    "Miejscowość, O: ImięO NazwiskoO l.wiekO, M: IM NM l.wM"
+    """
+    parts = []
+    
+    # Miejscowość
+    place = record.get('place', '').strip()
+    if place and place != '-':
+        parts.append(place)
+    
+    # Ojciec
+    father_parts = []
+    f_name = record.get('fatherName', '').strip()
+    f_surname = record.get('fatherSurname', '').strip()
+    f_age = record.get('fatherAge', '').strip()
+    
+    if f_name or f_surname:
+        if f_name and f_name != '-':
+            father_parts.append(f_name)
+        if f_surname and f_surname != '-':
+            father_parts.append(f_surname)
+        if f_age and f_age != '-':
+            father_parts.append(f'l.{f_age}' if not f_age.startswith('l.') else f_age)
+        
+        if father_parts:
+            parts.append(f"O: {' '.join(father_parts)}")
+    
+    # Matka
+    mother_parts = []
+    m_name = record.get('motherName', '').strip()
+    m_surname = record.get('motherSurname', '').strip()
+    m_age = record.get('motherAge', '').strip()
+    
+    if m_name or m_surname:
+        if m_name and m_name != '-':
+            mother_parts.append(m_name)
+        if m_surname and m_surname != '-':
+            mother_parts.append(m_surname)
+        if m_age and m_age != '-':
+            mother_parts.append(f'l.{m_age}' if not m_age.startswith('l.') else m_age)
+        
+        if mother_parts:
+            parts.append(f"M: {' '.join(mother_parts)}")
+    
+    return ', '.join(parts) if parts else ''
 
 def parse_genealogical_data_local(text):
     """
@@ -312,17 +404,54 @@ def validate_record_local(record):
     father_name = record.get('fatherName', '').lower() if record.get('fatherName') else ''
     mother_name = record.get('motherName', '').lower() if record.get('motherName') else ''
     
-    record['fatherNameValidated'] = father_name in NAME_DATABASE['all_names'] if father_name else False
-    record['motherNameValidated'] = mother_name in NAME_DATABASE['all_names'] if mother_name else False
+    # Dla rodziców: TYLKO płciowe imiona (męskie dla ojca, żeńskie dla matki)
+    record['fatherNameValidated'] = father_name in NAME_DATABASE['male_names'] if father_name else False
+    record['motherNameValidated'] = mother_name in NAME_DATABASE['female_names'] if mother_name else False
     
-    # Sprawdź nazwiska (case insensitive)
+    # Sprawdź nazwiska (case insensitive) - TYLKO płciowe dla rodziców
     father_surname = record.get('fatherSurname', '').lower() if record.get('fatherSurname') else ''
     mother_surname = record.get('motherSurname', '').lower() if record.get('motherSurname') else ''
     mother_maiden = record.get('motherMaidenName', '').lower() if record.get('motherMaidenName') else ''
     
-    record['fatherSurnameValidated'] = father_surname in NAME_DATABASE['all_surnames'] if father_surname else False
-    record['motherSurnameValidated'] = mother_surname in NAME_DATABASE['all_surnames'] if mother_surname else False
-    record['motherMaidenNameValidated'] = mother_maiden in NAME_DATABASE['all_surnames'] if mother_maiden else False
+    # Dla ojca TYLKO nazwiska męskie
+    record['fatherSurnameValidated'] = father_surname in NAME_DATABASE['male_surnames'] if father_surname else False
+    
+    # Dla matki TYLKO nazwiska żeńskie
+    record['motherSurnameValidated'] = mother_surname in NAME_DATABASE['female_surnames'] if mother_surname else False
+    record['motherMaidenNameValidated'] = mother_maiden in NAME_DATABASE['female_surnames'] if mother_maiden else False
+    
+    # Sprawdź miejsce (case insensitive)
+    place = record.get('place', '').lower() if record.get('place') else ''
+    record['placeValidated'] = place in NAME_DATABASE['places'] if place else False
+    
+    # Sprawdź wiek rodziców
+    record['fatherAgeValidated'] = validate_parent_age(record.get('fatherAge', ''))
+    record['motherAgeValidated'] = validate_parent_age(record.get('motherAge', ''))
+
+def validate_parent_age(age_str):
+    """
+    Walidacja wieku rodzica - sprawdź czy jest w rozsądnym przedziale
+    """
+    if not age_str or age_str.strip() == '' or age_str == '-':
+        return None  # Brak danych - nie waliduj
+    
+    try:
+        # Usuń "l." jeśli występuje
+        age_clean = age_str.replace('l.', '').strip()
+        age = int(age_clean)
+        
+        # Sprawdzone przedziały wiekowe dla rodziców w XIX wieku
+        # Ojciec: 16-70 lat (minimalny wiek ojcostwa, maksymalny rozsądny wiek)
+        # Matka: 14-50 lat (minimalny wiek macierzyństwa, maksymalny rozsądny wiek)
+        # Będziemy używać tych samych granic dla obu rodziców dla uproszczenia
+        
+        if 14 <= age <= 70:
+            return True
+        else:
+            return False
+            
+    except (ValueError, AttributeError):
+        return False  # Niepoprawny format wieku
 
 @app.route('/api/health', methods=['GET'])
 def health():
@@ -385,7 +514,7 @@ def parse_data():
                     'mother_name': r['motherName'],
                     'mother_surname': r['motherSurname'],
                     'mother_age': r['motherAge'],
-                    'origin_place': r['place'],
+                    'place': r['place'],  # Zmienione z origin_place na place
                     'year': r['year'],
                     'number': r['number'],
                     'surname': r['surname'],
@@ -396,6 +525,15 @@ def parse_data():
                 'warnings': [],
                 'original_text': r['original']
             })() for r in results]
+            
+            # DEBUG: Pokaż pierwszy rekord
+            if results:
+                first = results[0]
+                print(f"🔍 DEBUG pierwszy rekord po konwersji:")
+                print(f"   record_id: {first.record_id}")
+                print(f"   fatherName: {first.parent_data.father_name}")
+                print(f"   place: {first.parent_data.place}")
+                print(f"   notes: {first.parent_data.notes[:50] if first.parent_data.notes else 'brak'}")
         
         else:
             return jsonify({'error': 'Nie znaleziono danych (file lub data)'}), 400
@@ -468,10 +606,10 @@ def validate_results(results):
     
     for result in results:
         record_validation = {
-            'father_name_valid': result.parent_data.father_name in NAME_DATABASE['all_names'],
-            'father_surname_valid': result.parent_data.father_surname in NAME_DATABASE['all_surnames'],
-            'mother_name_valid': result.parent_data.mother_name in NAME_DATABASE['all_names'],
-            'mother_surname_valid': result.parent_data.mother_surname in NAME_DATABASE['all_surnames'],
+            'father_name_valid': result.parent_data.father_name in NAME_DATABASE['male_names'],
+            'father_surname_valid': result.parent_data.father_surname in NAME_DATABASE['male_surnames'],
+            'mother_name_valid': result.parent_data.mother_name in NAME_DATABASE['female_names'],
+            'mother_surname_valid': result.parent_data.mother_surname in NAME_DATABASE['female_surnames'],
         }
         validation[result.record_id] = record_validation
     
@@ -494,6 +632,9 @@ def generate_table():
         rows_html = []
         
         for record in records:
+            # Waliduj rekord (jeśli nie ma flag walidacji lub są False)
+            validate_record_local(record)
+            
             try:
                 # Oblicz status rekordu
                 has_data = any([record.get('fatherName'), record.get('fatherSurname'), 
@@ -521,8 +662,8 @@ def generate_table():
                 # Klasa CSS dla wiersza
                 row_class = f"row-{status}"
                 
-                # Pełna linia oryginalna dla tooltip
-                original_line = '|'.join([
+                # Pełna linia oryginalna dla tooltip z separatorem ⁂
+                original_line = '⁂'.join([
                     str(record.get('id', '')),
                     str(record.get('year', '')),
                     str(record.get('number', '')),
@@ -543,30 +684,57 @@ def generate_table():
                     # Puste wartości
                     if not field_value or field_value == '-':
                         return 'text-empty'
-                    
-                    # Walidowane pola rodziców
-                    if field_name in ['fatherName', 'motherName']:
-                        if field_value.lower() in NAME_DATABASE['all_names']:
+
+                    # Użyj pre-komputowanych flag walidacji jeśli dostępne
+                    validation_flag = f'{field_name}Validated'
+                    if validation_flag in record:
+                        if record[validation_flag]:
                             return 'text-validated'
-                        else:
+                        elif field_value.strip():
                             return 'cell-not-found'
-                    elif field_name in ['fatherSurname', 'motherSurname']:
-                        if field_value.lower() in NAME_DATABASE['all_surnames']:
+                        return ''
+
+                    # Fallback: sprawdź bezpośrednio w bazie danych
+                    normalized_value = field_value.lower()
+                    if field_name == 'fatherName':
+                        # Ojciec: TYLKO male_names (neutralne też są w male_names)
+                        if normalized_value in NAME_DATABASE['male_names']:
                             return 'text-validated'
-                        else:
-                            return 'cell-not-found'
-                    # Walidowane pola dziecka
-                    elif field_name == 'surname':
-                        if field_value.lower() in NAME_DATABASE['all_surnames']:
+                    elif field_name == 'motherName':
+                        # Matka: TYLKO female_names (neutralne też są w female_names)
+                        if normalized_value in NAME_DATABASE['female_names']:
                             return 'text-validated'
-                        else:
-                            return 'cell-not-found'
                     elif field_name == 'name':
-                        if field_value.lower() in NAME_DATABASE['all_names']:
+                        # Dziecko: wszystkie imiona
+                        if normalized_value in NAME_DATABASE['all_names']:
                             return 'text-validated'
-                        else:
+                    elif field_name == 'fatherSurname':
+                        # Ojciec: TYLKO nazwiska męskie
+                        if normalized_value in NAME_DATABASE['male_surnames']:
+                            return 'text-validated'
+                    elif field_name in ['motherSurname', 'motherMaidenName']:
+                        # Matka: TYLKO nazwiska żeńskie
+                        if normalized_value in NAME_DATABASE['female_surnames']:
+                            return 'text-validated'
+                    elif field_name == 'surname':
+                        # Dziecko: wszystkie nazwiska
+                        if normalized_value in NAME_DATABASE['all_surnames']:
+                            return 'text-validated'
+                    elif field_name == 'place':
+                        # Miejscowość
+                        if normalized_value in NAME_DATABASE['places']:
+                            return 'text-validated'
+                    elif field_name in ['fatherAge', 'motherAge']:
+                        # Sprawdź wiek rodziców
+                        if validate_parent_age(field_value) is True:
+                            return 'text-validated'
+                        elif validate_parent_age(field_value) is False:
                             return 'cell-not-found'
-                    
+
+                    # Jeśli wartość niepusta ale nie znaleziona w bazie
+                    if field_value.strip():
+                        return 'cell-not-found'
+
                     return ''
                 
                 # Funkcja do dodawania edytowalności
@@ -579,13 +747,13 @@ def generate_table():
                     f'<td>{record.get("number", "-")}</td>',
                     f'<td class="{cell_class("surname", record.get("surname", "-"))}">{record.get("surname", "-")}</td>',
                     f'<td class="{cell_class("name", record.get("name", "-"))}">{record.get("name", "-")}</td>',
-                    f'<td>{record.get("place", "-")}</td>',
-                    f'<td class="{cell_class("fatherName", record.get("fatherName", "-"))} {editable_class(True)}" onclick="openEditModal(\'{record.get("id", "")}\')">{ record.get("fatherName", "-")}</td>',
-                    f'<td class="{cell_class("fatherSurname", record.get("fatherSurname", "-"))} {editable_class(True)}" onclick="openEditModal(\'{record.get("id", "")}\')">{ record.get("fatherSurname", "-")}</td>',
-                    f'<td class="{editable_class(True)}" onclick="openEditModal(\'{record.get("id", "")}\')">{ record.get("fatherAge", "-")}</td>',
-                    f'<td class="{cell_class("motherName", record.get("motherName", "-"))} {editable_class(True)}" onclick="openEditModal(\'{record.get("id", "")}\')">{ record.get("motherName", "-")}</td>',
-                    f'<td class="{cell_class("motherSurname", record.get("motherSurname", "-"))} {editable_class(True)}" onclick="openEditModal(\'{record.get("id", "")}\')">{ record.get("motherSurname", "-")}</td>',
-                    f'<td class="{editable_class(True)}" onclick="openEditModal(\'{record.get("id", "")}\')">{ record.get("motherAge", "-")}</td>',
+                    f'<td class="{cell_class("place", record.get("place", "-"))}">{record.get("place", "-")}</td>',
+                    f'<td class="{cell_class("fatherName", record.get("fatherName", "-"))} cell-editable" onclick="startInlineEdit(this, \'fatherName\', \'{record.get("id", "")}\')">{ record.get("fatherName", "-")}</td>',
+                    f'<td class="{cell_class("fatherSurname", record.get("fatherSurname", "-"))} cell-editable" onclick="startInlineEdit(this, \'fatherSurname\', \'{record.get("id", "")}\')">{ record.get("fatherSurname", "-")}</td>',
+                    f'<td class="{cell_class("fatherAge", record.get("fatherAge", "-"))} cell-editable" onclick="startInlineEdit(this, \'fatherAge\', \'{record.get("id", "")}\')">{ record.get("fatherAge", "-")}</td>',
+                    f'<td class="{cell_class("motherName", record.get("motherName", "-"))} cell-editable" onclick="startInlineEdit(this, \'motherName\', \'{record.get("id", "")}\')">{ record.get("motherName", "-")}</td>',
+                    f'<td class="{cell_class("motherSurname", record.get("motherSurname", "-"))} cell-editable" onclick="startInlineEdit(this, \'motherSurname\', \'{record.get("id", "")}\')">{ record.get("motherSurname", "-")}</td>',
+                    f'<td class="{cell_class("motherAge", record.get("motherAge", "-"))} cell-editable" onclick="startInlineEdit(this, \'motherAge\', \'{record.get("id", "")}\')">{ record.get("motherAge", "-")}</td>',
                     f'<td>{record.get("notes", "-")}</td>',
                     f'<td title="{original_line}">{original_line[:50]}...</td>',
                     f'<td><button class="btn btn-small" onclick="openEditModal(\'{record.get("id", "")}\')"><span class="material-icons" style="font-size: 16px;">edit</span></button></td>'
@@ -629,16 +797,26 @@ def validate_records():
         }
         
         for record in records:
-            # Walidacja imion i nazwisk (case-insensitive)
+            # Walidacja imion, nazwisk i miejscowości (case-insensitive)
+            child_name = record.get('name', '').lower() if record.get('name') else ''
+            child_surname = record.get('surname', '').lower() if record.get('surname') else ''
+            place = record.get('place', '').lower() if record.get('place') else ''
             father_name = record.get('fatherName', '').lower() if record.get('fatherName') else ''
             father_surname = record.get('fatherSurname', '').lower() if record.get('fatherSurname') else ''
             mother_name = record.get('motherName', '').lower() if record.get('motherName') else ''
             mother_surname = record.get('motherSurname', '').lower() if record.get('motherSurname') else ''
             
+            child_name_valid = child_name in NAME_DATABASE['all_names'] if child_name else False
+            child_surname_valid = child_surname in NAME_DATABASE['all_surnames'] if child_surname else False
+            place_valid = place in NAME_DATABASE['places'] if place else False
             father_name_valid = father_name in NAME_DATABASE['all_names'] if father_name else False
             father_surname_valid = father_surname in NAME_DATABASE['all_surnames'] if father_surname else False
             mother_name_valid = mother_name in NAME_DATABASE['all_names'] if mother_name else False
             mother_surname_valid = mother_surname in NAME_DATABASE['all_surnames'] if mother_surname else False
+            
+            # Walidacja wieku rodziców
+            father_age_valid = validate_parent_age(record.get('fatherAge', ''))
+            mother_age_valid = validate_parent_age(record.get('motherAge', ''))
             
             # Określ status rekordu
             has_data = bool(record.get('fatherName') or record.get('fatherSurname') or 
@@ -656,10 +834,15 @@ def validate_records():
             
             validated_record = {
                 **record,
+                'nameValidated': child_name_valid,
+                'surnameValidated': child_surname_valid,
+                'placeValidated': place_valid,
                 'fatherNameValidated': father_name_valid,
                 'fatherSurnameValidated': father_surname_valid,
+                'fatherAgeValidated': father_age_valid,
                 'motherNameValidated': mother_name_valid,
                 'motherSurnameValidated': mother_surname_valid,
+                'motherAgeValidated': mother_age_valid,
                 'motherMaidenNameValidated': mother_surname_valid,
                 'status': status
             }
@@ -708,21 +891,51 @@ def export_data(format):
             if not records:
                 return jsonify({'error': 'Brak danych do eksportu'}), 400
             
-            # Get all keys from first record
-            keys = records[0].keys() if isinstance(records[0], dict) else []
+            # Określona kolejność kolumn
+            headers = ['id', 'year', 'number', 'surname', 'name', 'place', 
+                      'fatherName', 'fatherSurname', 'fatherAge', 
+                      'motherName', 'motherSurname', 'motherAge', 'notes', 'original']
+            header_labels = ['ID', 'ROK', 'Nr', 'Nazwisko', 'Imię', 'Miejscowość',
+                           'ImięO', 'NazwiskoO', 'wiekO', 'IM', 'NM', 'wM', 'uwagi', 'UWAGI ORG']
             
             lines = []
             # Header
-            lines.append('\t'.join(keys))
+            lines.append('\t'.join(header_labels))
             # Data rows
-            for record in records:
+            for idx, record in enumerate(records):
+                # Debug: pokaż pierwsze 3 rekordy
+                if idx < 3:
+                    print(f"DEBUG Export record {idx}: ID={record.get('id')}, fatherName={record.get('fatherName')}, motherName={record.get('motherName')}")
+                
+                # Zbuduj UWAGI ORG z separatorem ⁂ (nie TAB!)
+                original_line = '⁂'.join([
+                    str(record.get('id', '')),
+                    str(record.get('year', '')),
+                    str(record.get('number', '')),
+                    str(record.get('surname', '')),
+                    str(record.get('name', '')),
+                    str(record.get('place', '')),
+                    str(record.get('fatherName', '')),
+                    str(record.get('fatherSurname', '')),
+                    str(record.get('fatherAge', '')),
+                    str(record.get('motherName', '')),
+                    str(record.get('motherSurname', '')),
+                    str(record.get('motherAge', '')),
+                    str(record.get('notes', ''))
+                ])
+                
                 values = []
-                for key in keys:
-                    if isinstance(record, dict):
-                        val = record.get(key, '')
+                for key in headers:
+                    if key == 'original':
+                        # Użyj zbudowanej linii zamiast surowego original
+                        values.append(original_line)
                     else:
-                        val = getattr(record, key, '')
-                    values.append(str(val))
+                        val = record.get(key, '') if isinstance(record, dict) else getattr(record, key, '')
+                        # Escapuj cudzysłowy i otocz wartość cudzysłowami jeśli zawiera TAB lub newline
+                        val_str = str(val)
+                        if '\t' in val_str or '\n' in val_str or '"' in val_str:
+                            val_str = '"' + val_str.replace('"', '""') + '"'
+                        values.append(val_str)
                 lines.append('\t'.join(values))
             
             output = io.BytesIO('\n'.join(lines).encode('utf-8'))
@@ -738,6 +951,82 @@ def export_data(format):
     
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/export/tsv-backend', methods=['POST'])
+def export_tsv_from_backend():
+    """
+    Eksportuj TSV bezpośrednio z danych backendu (te same co tabela 3)
+    POST body: {'records': [list of MockResult objects from parser]}
+    """
+    try:
+        request_data = request.json
+        records = request_data.get('records', [])
+        
+        if not records:
+            return 'Brak danych do eksportu', 400
+        
+        # Nagłówki
+        headers = ['ID', 'ROK', 'Nr', 'Nazwisko', 'Imię', 'Miejscowość',
+                   'ImięO', 'NazwiskoO', 'wiekO', 'IM', 'NM', 'wM', 'uwagi', 'UWAGI ORG']
+        
+        lines = ['\t'.join(headers)]
+        
+        # Konwertuj rekordy
+        for record in records:
+            # Pobierz dane z parent_data (record to MockResult object!)
+            pd = record.parent_data
+            
+            # Zbuduj UWAGI ORG z separatorem ⁂
+            original_line = '⁂'.join([
+                str(record.record_id),
+                str(pd.year),
+                str(pd.number),
+                str(pd.surname),
+                str(pd.name),
+                str(pd.place),
+                str(pd.father_name),
+                str(pd.father_surname),
+                str(pd.father_age),
+                str(pd.mother_name),
+                str(pd.mother_surname),
+                str(pd.mother_age),
+                str(pd.notes)
+            ])
+            
+            # Wiersz TSV
+            values = [
+                record.record_id,
+                pd.year,
+                pd.number,
+                pd.surname,
+                pd.name,
+                pd.place,
+                pd.father_name,
+                pd.father_surname,
+                pd.father_age,
+                pd.mother_name,
+                pd.mother_surname,
+                pd.mother_age,
+                pd.notes,
+                original_line
+            ]
+            
+            # Escapuj wartości (cudzysłów jeśli zawiera TAB, newline lub ")
+            escaped_values = []
+            for val in values:
+                val_str = str(val)
+                if '\t' in val_str or '\n' in val_str or '"' in val_str:
+                    val_str = '"' + val_str.replace('"', '""') + '"'
+                escaped_values.append(val_str)
+            
+            lines.append('\t'.join(escaped_values))
+        
+        # Zwróć TSV jako text
+        return '\n'.join(lines), 200, {'Content-Type': 'text/tab-separated-values; charset=utf-8'}
+    
+    except Exception as e:
+        print(f"❌ Błąd eksportu TSV: {e}")
+        return f'Błąd eksportu: {str(e)}', 500
 
 if __name__ == '__main__':
     print("Inicjalizacja Parent Validator Backend...")

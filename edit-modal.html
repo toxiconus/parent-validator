@@ -1,125 +1,271 @@
-<!-- Modal edycji rekordu --> 
-<div class="modal-overlay" id="editModal"> 
-    <div class="modal-content modal-fullscreen"> 
-        <div class="modal-header"> 
-            <h2>Edycja rekordu <span id="modalRecordId"></span></h2> 
-            <button class="close-btn" onclick="closeEditModal()">×</button> 
-        </div> 
-        <div class="modal-body"> 
-            <!-- Oryginalny tekst - sticky --> 
-            <div class="original-text-section"> 
-                <div class="section-header"> 
-                    <span class="material-icons">description</span> 
-                    <span>ORYGINALNY TEKST (TSV)</span> 
-                </div> 
-                <div class="original-text-display" id="originalTextDisplay"></div> 
-            </div> 
-            <form id="editForm"> 
-                <!-- Górny pasek - metadata --> 
-                <div class="top-bar"> 
-                    <div class="field-group"> 
-                        <input type="text" id="editYear" class="top-bar-input"> 
-                        <span class="field-label">Rok</span> 
-                    </div> 
-                    <div class="field-group"> 
-                        <input type="text" id="editPlace" class="top-bar-input"> 
-                        <span class="field-label">Miejscowość</span> 
-                    </div> 
-                    <div class="field-group"> 
-                        <input type="text" id="editNumber" class="top-bar-input"> 
-                        <span class="field-label">Nr aktu</span> 
-                    </div> 
+<!-- Modal edycji rekordu -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal-content modal-fullscreen">
+        <div class="modal-header">
+            <h2>Edycja rekordu <span id="modalRecordId"></span></h2>
+            <button class="close-btn" onclick="closeEditModal()" aria-label="Zamknij">×</button>
+        </div>
+        <div class="modal-body">
+            <!-- Oryginalny tekst - sticky -->
+            <div class="original-text-section">
+                <div class="section-header">
+                    <span class="material-icons">description</span>
+                    <span>ORYGINALNY TEKST (TSV)</span>
+                </div>
+                <div class="original-text-display" id="originalTextDisplay"></div>
+            </div>
+            <form id="editForm">
+                <!-- Typ rekordu (nowe pole) -->
+                <div class="field-container full-width">
+                    <label class="field-label" for="recordType">Typ rekordu</label>
+                    <select id="recordType" class="field-input" onchange="toggleSections()">
+                        <option value="baptism">Chrzest</option>
+                        <option value="death">Zgon</option>
+                        <option value="marriage">Małżeństwo</option>
+                    </select>
+                </div>
+
+                <!-- Górny pasek - metadata -->
+                <div class="top-bar">
                     <div class="field-group">
-                        <input type="text" id="editID" class="top-bar-input">
-                        <span class="field-label">ID</span>
+                        <label class="field-label" for="editYear">Rok</label>
+                        <input type="number" id="editYear" class="top-bar-input" min="1000" max="2100" required>
                     </div>
-                </div> 
-                
-                <!-- Dziecko --> 
-                <div class="section-compact child-section"> 
-                    <div class="row-compact"> 
-                        <div class="field-container"> 
-                            <div class="hint-source" id="hintChildSurname"></div> 
-                            <input type="text" id="editSurname" class="field-input"> 
-                            <span class="field-label">Nazwisko</span> 
-                        </div> 
-                        <div class="field-container"> 
-                            <div class="hint-source" id="hintChildName"></div> 
-                            <input type="text" id="editName" class="field-input"> 
-                            <span class="field-label">Imię</span> 
-                        </div> 
-                    </div> 
-                </div> 
-                
-                <!-- Rodzice --> 
-                <div class="parents-row"> 
-                    <!-- Ojciec --> 
-                    <div class="parent-section father-section"> 
-                        <div class="row-compact"> 
-                            <div class="field-container"> 
-                                <div class="hint-source" id="hintFatherName"></div> 
-                                <input type="text" id="editFatherName" class="field-input"> 
-                                <span class="field-label">Imię</span> 
-                            </div> 
-                        </div> 
-                        <div class="row-compact"> 
-                            <div class="field-container"> 
-                                <div class="hint-source" id="hintFatherSurname"></div> 
-                                <input type="text" id="editFatherSurname" class="field-input"> 
-                                <span class="field-label">Nazwisko</span> 
-                            </div> 
-                            <div class="field-container"> 
-                                <input type="text" id="editFatherAge" class="field-input" placeholder="lata"> 
-                                <span class="field-label">Wiek</span> 
-                            </div> 
-                        </div> 
-                    </div> 
-                    
-                    <!-- Matka --> 
-                    <div class="parent-section mother-section"> 
-                        <div class="row-compact"> 
-                            <div class="field-container"> 
-                                <div class="hint-source" id="hintMotherName"></div> 
-                                <input type="text" id="editMotherName" class="field-input"> 
-                                <span class="field-label">Imię</span> 
-                            </div> 
-                        </div> 
-                        <div class="row-compact"> 
-                            <div class="field-container"> 
-                                <div class="hint-source" id="hintMotherSurname"></div> 
-                                <input type="text" id="editMotherSurname" class="field-input"> 
-                                <span class="field-label">Nazwisko panienskie</span> 
-                            </div> 
-                            <div class="field-container"> 
-                                <input type="text" id="editMotherAge" class="field-input" placeholder="lata"> 
-                                <span class="field-label">Wiek</span> 
-                            </div> 
-                        </div> 
-                    </div> 
-                </div> 
-                
-                <!-- Uwagi --> 
-                <div class="section-notes"> 
-                    <div class="field-container full-width"> 
-                        <textarea id="editNotes" class="field-textarea" rows="2" placeholder="Dodatkowe informacje..."></textarea> 
-                        <span class="field-label">Uwagi</span> 
-                    </div> 
-                    <div class="field-container full-width"> 
-                        <textarea id="editOriginalNotes" class="field-textarea" rows="1" readonly placeholder="Oryginalne dane (tylko do odczytu)"></textarea> 
-                        <span class="field-label">Oryginalne dane</span> 
-                    </div> 
-                </div> 
-                
-                <!-- Przyciski akcji --> 
-                <div class="form-actions"> 
-                    <button type="submit" class="btn btn-primary"> 
-                        <span class="material-icons">save</span> Zapisz 
-                    </button> 
-                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()"> 
-                        <span class="material-icons">close</span> Anuluj 
-                    </button> 
-                </div> 
-            </form> 
-        </div> 
-    </div> 
-</div> 
+                    <div class="field-group">
+                        <label class="field-label" for="editPlace">Miejscowość</label>
+                        <input type="text" id="editPlace" class="top-bar-input" required>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="editNumber">Nr aktu</label>
+                        <input type="text" id="editNumber" class="top-bar-input">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="editID">ID</label>
+                        <input type="text" id="editID" class="top-bar-input">
+                    </div>
+                </div>
+
+                <!-- Sekcja chrztu (domyślna) -->
+                <div id="baptismSection" class="section-compact child-section">
+                    <!-- Dziecko -->
+                    <h3>Dziecko</h3>
+                    <div class="row-compact">
+                        <div class="field-container">
+                            <label class="field-label" for="editSurname">Nazwisko</label>
+                            <div class="hint-source" id="hintChildSurname"></div>
+                            <input type="text" id="editSurname" class="field-input" required>
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="editName">Imię</label>
+                            <div class="hint-source" id="hintChildName"></div>
+                            <input type="text" id="editName" class="field-input" required>
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="editBirthDate">Data urodzenia</label>
+                            <input type="date" id="editBirthDate" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="editBaptismDate">Data chrztu</label>
+                            <input type="date" id="editBaptismDate" class="field-input">
+                        </div>
+                    </div>
+                    <!-- Chrzestni (nowe) -->
+                    <h4>Chrzestni</h4>
+                    <div class="row-compact">
+                        <div class="field-container">
+                            <label class="field-label" for="godfatherName">Imię ojca chrzestnego</label>
+                            <input type="text" id="godfatherName" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="godfatherSurname">Nazwisko ojca chrzestnego</label>
+                            <input type="text" id="godfatherSurname" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="godmotherName">Imię matki chrzestnej</label>
+                            <input type="text" id="godmotherName" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="godmotherSurname">Nazwisko matki chrzestnej</label>
+                            <input type="text" id="godmotherSurname" class="field-input">
+                        </div>
+                    </div>
+                    <!-- Rodzice -->
+                    <div class="parents-row">
+                        <!-- Ojciec -->
+                        <div class="parent-section father-section">
+                            <h4>Ojciec</h4>
+                            <div class="row-compact">
+                                <div class="field-container">
+                                    <label class="field-label" for="editFatherName">Imię</label>
+                                    <div class="hint-source" id="hintFatherName"></div>
+                                    <input type="text" id="editFatherName" class="field-input">
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="editFatherSurname">Nazwisko</label>
+                                    <div class="hint-source" id="hintFatherSurname"></div>
+                                    <input type="text" id="editFatherSurname" class="field-input">
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="editFatherAge">Wiek</label>
+                                    <input type="number" id="editFatherAge" class="field-input" min="0" placeholder="lata">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Matka -->
+                        <div class="parent-section mother-section">
+                            <h4>Matka</h4>
+                            <div class="row-compact">
+                                <div class="field-container">
+                                    <label class="field-label" for="editMotherName">Imię</label>
+                                    <div class="hint-source" id="hintMotherName"></div>
+                                    <input type="text" id="editMotherName" class="field-input">
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="editMotherSurname">Nazwisko panieńskie</label>
+                                    <div class="hint-source" id="hintMotherSurname"></div>
+                                    <input type="text" id="editMotherSurname" class="field-input">
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="editMotherAge">Wiek</label>
+                                    <input type="number" id="editMotherAge" class="field-input" min="0" placeholder="lata">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sekcja zgonu (ukryta domyślnie) -->
+                <div id="deathSection" class="section-compact hidden">
+                    <h3>Zmarły</h3>
+                    <div class="row-compact">
+                        <div class="field-container">
+                            <label class="field-label" for="deceasedName">Imię</label>
+                            <input type="text" id="deceasedName" class="field-input" required>
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="deceasedSurname">Nazwisko</label>
+                            <input type="text" id="deceasedSurname" class="field-input" required>
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="deceasedAge">Wiek</label>
+                            <input type="number" id="deceasedAge" class="field-input" min="0">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="deathDate">Data zgonu</label>
+                            <input type="date" id="deathDate" class="field-input">
+                        </div>
+                        <div class="field-container full-width">
+                            <label class="field-label" for="deathCause">Przyczyna śmierci</label>
+                            <textarea id="deathCause" class="field-textarea" rows="2"></textarea>
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="burialDate">Data pogrzebu</label>
+                            <input type="date" id="burialDate" class="field-input">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sekcja małżeństwa (ukryta domyślnie) -->
+                <div id="marriageSection" class="section-compact hidden">
+                    <h3>Małżeństwo</h3>
+                    <div class="parents-row"> <!-- Ponowne użycie dla małżonków -->
+                        <!-- Pan młody -->
+                        <div class="parent-section father-section">
+                            <h4>Pan młody</h4>
+                            <div class="row-compact">
+                                <div class="field-container">
+                                    <label class="field-label" for="groomName">Imię</label>
+                                    <input type="text" id="groomName" class="field-input" required>
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="groomSurname">Nazwisko</label>
+                                    <input type="text" id="groomSurname" class="field-input" required>
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="groomAge">Wiek</label>
+                                    <input type="number" id="groomAge" class="field-input" min="0">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Panna młoda -->
+                        <div class="parent-section mother-section">
+                            <h4>Panna młoda</h4>
+                            <div class="row-compact">
+                                <div class="field-container">
+                                    <label class="field-label" for="brideName">Imię</label>
+                                    <input type="text" id="brideName" class="field-input" required>
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="brideMaidenSurname">Nazwisko panieńskie</label>
+                                    <input type="text" id="brideMaidenSurname" class="field-input" required>
+                                </div>
+                                <div class="field-container">
+                                    <label class="field-label" for="brideAge">Wiek</label>
+                                    <input type="number" id="brideAge" class="field-input" min="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row-compact">
+                        <div class="field-container">
+                            <label class="field-label" for="marriageDate">Data małżeństwa</label>
+                            <input type="date" id="marriageDate" class="field-input">
+                        </div>
+                    </div>
+                    <!-- Świadkowie (nowe) -->
+                    <h4>Świadkowie</h4>
+                    <div class="row-compact">
+                        <div class="field-container">
+                            <label class="field-label" for="witness1Name">Imię świadka 1</label>
+                            <input type="text" id="witness1Name" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="witness1Surname">Nazwisko świadka 1</label>
+                            <input type="text" id="witness1Surname" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="witness2Name">Imię świadka 2</label>
+                            <input type="text" id="witness2Name" class="field-input">
+                        </div>
+                        <div class="field-container">
+                            <label class="field-label" for="witness2Surname">Nazwisko świadka 2</label>
+                            <input type="text" id="witness2Surname" class="field-input">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Uwagi (wspólne dla wszystkich) -->
+                <div class="section-notes">
+                    <div class="field-container full-width">
+                        <label class="field-label" for="editNotes">Uwagi</label>
+                        <textarea id="editNotes" class="field-textarea" rows="3" placeholder="Dodatkowe informacje..."></textarea>
+                    </div>
+                    <div class="field-container full-width">
+                        <label class="field-label" for="editOriginalNotes">Oryginalne dane</label>
+                        <textarea id="editOriginalNotes" class="field-textarea" rows="2" readonly placeholder="Oryginalne dane (tylko do odczytu)"></textarea>
+                    </div>
+                </div>
+
+                <!-- Przyciski akcji -->
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <span class="material-icons">save</span> Zapisz
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">
+                        <span class="material-icons">close</span> Anuluj
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Przykładowy JS do togglingu sekcji (dodaj do swojego skryptu) -->
+<script>
+    function toggleSections() {
+        const type = document.getElementById('recordType').value;
+        document.getElementById('baptismSection').classList.toggle('hidden', type !== 'baptism');
+        document.getElementById('deathSection').classList.toggle('hidden', type !== 'death');
+        document.getElementById('marriageSection').classList.toggle('hidden', type !== 'marriage');
+    }
+</script> 
