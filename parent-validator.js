@@ -754,15 +754,34 @@ function loadNameDatabase() {
         console.log('Ładowanie baz danych z localStorage cache');
         try {
             const cachedData = JSON.parse(cached);
+            console.log('Cache data keys:', Object.keys(cachedData));
+            console.log('Cache data types:', Object.keys(cachedData).map(key => ({key, type: Array.isArray(cachedData[key]) ? 'Array' : typeof cachedData[key], length: cachedData[key]?.length || 'N/A'})));
             // Konwertuj zwykłe obiekty z powrotem na Set
             Object.keys(cachedData).forEach(key => {
                 if (Array.isArray(cachedData[key])) {
                     nameDatabase[key] = new Set(cachedData[key]);
+                    console.log(`Konwertowano ${key} z Array (${cachedData[key].length}) na Set`);
                 } else {
                     nameDatabase[key] = cachedData[key];
+                    console.log(`Zachowano ${key} jako ${typeof cachedData[key]}`);
                 }
             });
+            
+            // Sprawdź czy wszystkie wymagane klucze są Set'ami
+            const requiredKeys = ['allNames', 'allSurnames', 'maleNames', 'femaleNames', 'maleSurnames', 'femaleSurnames'];
+            const allValid = requiredKeys.every(key => nameDatabase[key] instanceof Set);
+            
+            if (!allValid) {
+                console.warn('Cache zawiera nieprawidłowe dane - czyszczenie cache');
+                localStorage.removeItem(cacheKey);
+                localStorage.removeItem(cacheExpiryKey);
+                // Przeładuj dane z serwera
+                loadNameDatabase();
+                return;
+            }
+            
             console.log('Cache załadowany pomyślnie');
+            console.log('nameDatabase po ładowaniu:', Object.keys(nameDatabase).map(key => ({key, type: nameDatabase[key] instanceof Set ? 'Set' : typeof nameDatabase[key], size: nameDatabase[key] instanceof Set ? nameDatabase[key].size : 'N/A'})));
             return; // Nie ładuj ponownie
         } catch (err) {
             console.warn('Błąd parsowania cache:', err);
@@ -807,23 +826,33 @@ function loadNameDatabase() {
     };
     
     files.forEach((file, i) => {
-        fetch(`../../../data/${file}`)
-            .then(r => r.ok ? r.json() : [])
+        const url = `data/${file}`;
+        console.log(`Ładowanie ${url} jako ${keys[i]}`);
+        fetch(url)
+            .then(r => {
+                console.log(`${file} status: ${r.status}`);
+                return r.ok ? r.json() : [];
+            })
             .then(data => {
+                console.log(`${file} data type: ${Array.isArray(data) ? 'Array' : typeof data}, length: ${data?.length || 'N/A'}`);
                 if (Array.isArray(data)) {
                     nameDatabase[keys[i]] = new Set(data.map(item => item.trim().toLowerCase()));
-                    console.log(`Załadowano ${keys[i]}: ${data.length} elementów`);
+                    console.log(`Załadowano ${keys[i]}: ${data.length} elementów, Set size: ${nameDatabase[keys[i]].size}`);
+                } else {
+                    console.warn(`${file} nie zwrócił tablicy, zwracam pusty Set`);
+                    nameDatabase[keys[i]] = new Set();
                 }
                 checkAllLoaded();
             })
             .catch(err => {
                 console.warn(`Błąd ładowania ${file}:`, err);
+                nameDatabase[keys[i]] = new Set();
                 checkAllLoaded();
             });
     });
     
     // Load places database
-    fetch('../../../data/places.json')
+    fetch('data/places.json')
         .then(r => r.ok ? r.json() : [])
         .then(data => {
             if (Array.isArray(data)) {

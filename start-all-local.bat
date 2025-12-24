@@ -43,7 +43,7 @@ timeout /t 3 /nobreak >nul
 
 REM Serwer statyczny (port 8080)
 echo 🌐 Uruchamiam Frontend Server (port 8080)...
-start "Frontend Static Server" cmd /k "cd /d "%ROOT%" && python -m http.server 8080 --bind 0.0.0.0"
+start "Frontend Static Server" cmd /k "cd /d "%SCRIPT_DIR%" && python -m http.server 8080 --bind 0.0.0.0"
 
 REM Poczekaj na uruchomienie serwerów
 echo ⏳ Czekam na pełne uruchomienie serwerów...
@@ -58,16 +58,16 @@ powershell -Command "& {try { $null = Invoke-WebRequest -Uri 'http://localhost:5
 
 powershell -Command "& {try { $null = Invoke-WebRequest -Uri 'http://10.42.163.151:5000/api/health' -TimeoutSec 10 -UseBasicParsing; Write-Host '✅ Backend OK (http://10.42.163.151:5000)' -ForegroundColor Green } catch { Write-Host '❌ Backend niedostępny w sieci' -ForegroundColor Yellow }}"
 
-powershell -Command "& {try { $null = Invoke-WebRequest -Uri 'http://localhost:8080/modules/data-entry/parent-validator/index.html' -TimeoutSec 10 -UseBasicParsing; Write-Host '✅ Frontend OK (http://localhost:8080)' -ForegroundColor Green } catch { Write-Host '❌ Frontend niedostępny' -ForegroundColor Yellow }}"
+powershell -Command "& {try { $null = Invoke-WebRequest -Uri 'http://localhost:8080/index.html' -TimeoutSec 10 -UseBasicParsing; Write-Host '✅ Frontend OK (http://localhost:8080)' -ForegroundColor Green } catch { Write-Host '❌ Frontend niedostępny' -ForegroundColor Yellow }}"
 
-powershell -Command "& {try { $null = Invoke-WebRequest -Uri 'http://10.42.163.151:8080/modules/data-entry/parent-validator/index.html' -TimeoutSec 10 -UseBasicParsing; Write-Host '✅ Frontend OK (http://10.42.163.151:8080)' -ForegroundColor Green } catch { Write-Host '❌ Frontend niedostępny w sieci' -ForegroundColor Yellow }}"
+powershell -Command "& {try { $null = Invoke-WebRequest -Uri 'http://10.42.163.151:8080/index.html' -TimeoutSec 10 -UseBasicParsing; Write-Host '✅ Frontend OK (http://10.42.163.151:8080)' -ForegroundColor Green } catch { Write-Host '❌ Frontend niedostępny w sieci' -ForegroundColor Yellow }}"
 
 echo.
 echo ========================================
 echo   🎉 Serwery uruchomione!
 echo ========================================
-echo 🌐 Aplikacja lokalnie: http://localhost:8080/modules/data-entry/parent-validator/index.html
-echo 🌐 Aplikacja w sieci: http://10.42.163.151:8080/modules/data-entry/parent-validator/index.html
+echo 🌐 Aplikacja lokalnie: http://localhost:8080/index.html
+echo 🌐 Aplikacja w sieci: http://10.42.163.151:8080/index.html
 echo 🔧 Backend API lokalnie: http://localhost:5000/api/health
 echo 🔧 Backend API w sieci: http://10.42.163.151:5000/api/health
 echo ========================================
@@ -76,7 +76,7 @@ echo.
 REM Otwórz stronę w domyślnej przeglądarce
 echo 🌍 Otwieram aplikację w przeglądarce...
 timeout /t 2 /nobreak >nul
-start http://localhost:8080/modules/data-entry/parent-validator/index.html
+start http://localhost:8080/index.html
 
 echo.
 echo 💡 Serwery działają w tle w osobnych oknach

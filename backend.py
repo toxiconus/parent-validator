@@ -95,194 +95,206 @@ def parse_data_local(data_lines, separator='\t'):
     """
     records = []
     
-    for index, line in enumerate(data_lines):
-        fields = [f.strip() for f in line.split(separator)]
-        
-        # Pomiń puste linie
-        if not any(fields):
-            continue
-        
-        # Pomiń linię nagłówkową (jeśli pierwsza kolumna to "ID" i druga to "ROK" lub "Imię")
-        if index == 0 and fields[0].upper() == 'ID':
-            # Sprawdź czy to nagłówek (druga kolumna zawiera nazwę pola zamiast wartości)
-            if len(fields) > 1 and (fields[1].upper() in ['ROK', 'IMIĘ', 'IMIE', 'NAZWISKO']):
-                print(f"⚠ Pominięto linię nagłówkową: {line[:100]}")
+    try:
+        for index, line in enumerate(data_lines):
+            fields = [f.strip() for f in line.split(separator)]
+            
+            # DEBUG: sprawdź problematyczne linie
+            if len(fields) < 1:
+                print(f"⚠️ Pusta linia {index}: {repr(line)}")
                 continue
             
-        record_id = fields[0] if len(fields) > 0 else f'auto_{index}'
-        field_count = len(fields)
-        
-        record = {
-            'id': record_id,
-            'year': '',
-            'number': '',
-            'surname': '',
-            'name': '',
-            'place': '',
-            'fatherName': '',
-            'fatherSurname': '',
-            'fatherAge': '',
-            'motherName': '',
-            'motherSurname': '',
-            'motherAge': '',
-            'motherMaidenName': '',
-            'notes': '',
-            'original': line,
-            'fatherNameValidated': False,
-            'fatherSurnameValidated': False,
-            'motherNameValidated': False,
-            'motherSurnameValidated': False,
-            'motherMaidenNameValidated': False
-        }
-        
-        # Parsuj zależnie od liczby kolumn (jak w JavaScript)
-        if field_count >= 12:
-            # Sprawdź czy druga kolumna to rok (cyfry) czy nazwisko (tekst)
-            is_new_format = len(fields) > 1 and fields[1].isdigit() and len(fields[1]) == 4
+            # Pomiń puste linie
+            if not any(fields):
+                continue
             
-            if is_new_format:
-                # Format "ur nowe blinow.txt": ID|ROK|Nr|Nazwisko|Imię|Miejscowość|ImięO|NazwiskoO|wiekO|IM|NM|wM|uwagi
-                record.update({
-                    'year': fields[1],
-                    'number': fields[2],
-                    'surname': fields[3],
-                    'name': fields[4],
-                    'place': fields[5],
-                    'fatherName': fields[6],
-                    'fatherSurname': fields[7],
-                    'fatherAge': fields[8],
-                    'motherName': fields[9],
-                    'motherSurname': fields[10],
-                    'motherAge': fields[11],
-                    'motherMaidenName': fields[10],
-                    'notes': fields[12] if len(fields) > 12 else ''
-                })
-            else:
-                # Stary format rozszerzony
-                record.update({
-                    'surname': fields[1],
-                    'name': fields[2],
-                    'number': fields[3],
-                    'year': fields[4],
-                    'place': fields[6],
-                    'fatherName': fields[7],
-                    'fatherSurname': fields[8],
-                    'fatherAge': fields[9],
-                    'motherName': fields[11],
-                    'motherSurname': fields[12],
-                    'motherAge': fields[13],
-                    'motherMaidenName': fields[12],
-                    'notes': fields[14] if len(fields) > 14 else ''
-                })
-                
-        elif field_count >= 8:
-            # Stary format lub z genealogią
-            genealogical_string = fields[7] if len(fields) > 7 else ''
-            
-            # Sprawdź czy zawiera dane genealogiczne
-            has_genealogy = any(keyword in genealogical_string for keyword in [' i ', 's.', 'c.', ' z ', '/'])
-            
-            if has_genealogy:
-                # Parsuj dane genealogiczne
-                genealogy = parse_genealogical_data_local(genealogical_string)
-                record.update({
-                    'surname': fields[1],
-                    'name': fields[2],
-                    'year': fields[4] if len(fields) > 4 else '',
-                    'place': genealogy.get('place', ''),
-                    'fatherName': genealogy.get('fatherName', ''),
-                    'fatherSurname': genealogy.get('fatherSurname', ''),
-                    'motherName': genealogy.get('motherName', ''),
-                    'motherSurname': genealogy.get('motherSurname', ''),
-                    'motherMaidenName': genealogy.get('motherSurname', ''),
-                    'notes': genealogical_string
-                })
-            else:
-                # Standardowy stary format
-                record.update({
-                    'surname': fields[1],
-                    'name': fields[2],
-                    'year': fields[4] if len(fields) > 4 else '',
-                    'place': fields[6] if len(fields) > 6 else '',
-                    'notes': genealogical_string
-                })
-        else:
-            # Krótki format - inteligentne rozpoznawanie
-            year_value = ''
-            number_value = ''
-            surname_value = ''
-            name_value = ''
-            
-            # Sprawdź ID typu CH.LUB.BLIN.1908.001
-            id_match = re.match(r'.*\.(\d{4})\.(\d{1,3})$', record_id)
-            if id_match and field_count <= 5:
-                year_value = id_match.group(1)
-                number_value = id_match.group(2).lstrip('0') or id_match.group(2)
-            
-            # Przeszukaj pola
-            numeric_fields = []
-            text_fields = []
-            
-            for idx, field in enumerate(fields):
-                if idx == 0 and record_id:
+            # Pomiń linię nagłówkową (jeśli pierwsza kolumna to "ID" i druga to "ROK" lub "Imię")
+            if index == 0 and fields[0].upper() == 'ID':
+                # Sprawdź czy to nagłówek (druga kolumna zawiera nazwę pola zamiast wartości)
+                if len(fields) > 1 and (fields[1].upper() in ['ROK', 'IMIĘ', 'IMIE', 'NAZWISKO']):
+                    print(f"⚠ Pominięto linię nagłówkową: {line[:100]}")
                     continue
-                if field.isdigit():
-                    numeric_fields.append({'value': field, 'index': idx})
-                elif field.strip():
-                    text_fields.append({'value': field, 'index': idx})
+                
+            record_id = fields[0] if len(fields) > 0 else f'auto_{index}'
+            field_count = len(fields)
             
-            # Znajdź rok jeśli nie z ID
-            if not year_value:
-                for nf in numeric_fields:
-                    num = int(nf['value'])
-                    if len(nf['value']) == 4 and 1000 <= num <= 2500:
-                        year_value = nf['value']
-                        break
+            record = {
+                'id': record_id,
+                'year': '',
+                'number': '',
+                'surname': '',
+                'name': '',
+                'place': '',
+                'fatherName': '',
+                'fatherSurname': '',
+                'fatherAge': '',
+                'motherName': '',
+                'motherSurname': '',
+                'motherAge': '',
+                'motherMaidenName': '',
+                'notes': '',
+                'original': line,
+                'fatherNameValidated': False,
+                'fatherSurnameValidated': False,
+                'motherNameValidated': False,
+                'motherSurnameValidated': False,
+                'motherMaidenNameValidated': False
+            }
             
-            # Znajdź numer aktu
-            if not number_value:
-                for nf in numeric_fields:
-                    if nf['value'] != year_value and len(nf['value']) <= 3:
-                        number_value = nf['value']
-                        break
+            # Parsuj zależnie od liczby kolumn (jak w JavaScript)
+            if field_count >= 12:
+                # Sprawdź czy druga kolumna to rok (cyfry) czy nazwisko (tekst)
+                is_new_format = len(fields) > 1 and fields[1].isdigit() and len(fields[1]) == 4
+                
+                if is_new_format:
+                    # Format "ur nowe blinow.txt": ID|ROK|Nr|Nazwisko|Imię|Miejscowość|ImięO|NazwiskoO|wiekO|IM|NM|wM|uwagi
+                    record.update({
+                        'year': fields[1],
+                        'number': fields[2],
+                        'surname': fields[3],
+                        'name': fields[4],
+                        'place': fields[5],
+                        'fatherName': fields[6],
+                        'fatherSurname': fields[7],
+                        'fatherAge': fields[8],
+                        'motherName': fields[9],
+                        'motherSurname': fields[10],
+                        'motherAge': fields[11],
+                        'motherMaidenName': fields[10],
+                        'notes': fields[12] if len(fields) > 12 else ''
+                    })
+                else:
+                    # Stary format rozszerzony
+                    record.update({
+                        'surname': fields[1],
+                        'name': fields[2],
+                        'number': fields[3],
+                        'year': fields[4],
+                        'place': fields[6],
+                        'fatherName': fields[7],
+                        'fatherSurname': fields[8],
+                        'fatherAge': fields[9],
+                        'motherName': fields[11],
+                        'motherSurname': fields[12],
+                        'motherAge': fields[13],
+                        'motherMaidenName': fields[12],
+                        'notes': fields[14] if len(fields) > 14 else ''
+                    })
+                    
+            elif field_count >= 8:
+                # Stary format lub z genealogią
+                genealogical_string = fields[7] if len(fields) > 7 else ''
+                
+                # Sprawdź czy zawiera dane genealogiczne
+                has_genealogy = any(keyword in genealogical_string for keyword in [' i ', 's.', 'c.', ' z ', '/'])
+                
+                if has_genealogy:
+                    # Parsuj dane genealogiczne
+                    genealogy = parse_genealogical_data_local(genealogical_string)
+                    record.update({
+                        'surname': fields[1],
+                        'name': fields[2],
+                        'year': fields[4] if len(fields) > 4 else '',
+                        'place': genealogy.get('place', ''),
+                        'fatherName': genealogy.get('fatherName', ''),
+                        'fatherSurname': genealogy.get('fatherSurname', ''),
+                        'motherName': genealogy.get('motherName', ''),
+                        'motherSurname': genealogy.get('motherSurname', ''),
+                        'motherMaidenName': genealogy.get('motherSurname', ''),
+                        'notes': genealogical_string
+                    })
+                else:
+                    # Standardowy stary format
+                    record.update({
+                        'surname': fields[1],
+                        'name': fields[2],
+                        'year': fields[4] if len(fields) > 4 else '',
+                        'place': fields[6] if len(fields) > 6 else '',
+                        'notes': genealogical_string
+                    })
+            else:
+                # Krótki format - inteligentne rozpoznawanie
+                year_value = ''
+                number_value = ''
+                surname_value = ''
+                name_value = ''
+                
+                # Sprawdź ID typu CH.LUB.BLIN.1908.001
+                id_match = re.match(r'.*\.(\d{4})\.(\d{1,3})$', record_id)
+                if id_match and field_count <= 5:
+                    year_value = id_match.group(1)
+                    number_value = id_match.group(2).lstrip('0') or id_match.group(2)
+                
+                # Przeszukaj pola
+                numeric_fields = []
+                text_fields = []
+                
+                for idx, field in enumerate(fields):
+                    if idx == 0 and record_id:
+                        continue
+                    if field.isdigit():
+                        numeric_fields.append({'value': field, 'index': idx})
+                    elif field.strip():
+                        text_fields.append({'value': field, 'index': idx})
+                
+                # Znajdź rok jeśli nie z ID
+                if not year_value:
+                    for nf in numeric_fields:
+                        num = int(nf['value'])
+                        if len(nf['value']) == 4 and 1000 <= num <= 2500:
+                            year_value = nf['value']
+                            break
+                
+                # Znajdź numer aktu
+                if not number_value:
+                    for nf in numeric_fields:
+                        if nf['value'] != year_value and len(nf['value']) <= 3:
+                            number_value = nf['value']
+                            break
+                
+                # Pierwsze dwa pola tekstowe to nazwisko i imię
+                surname_value = ''
+                name_value = ''
+                place_value = ''
+                
+                if text_fields:
+                    surname_value = text_fields[0]['value']
+                    if len(text_fields) > 1:
+                        name_value = text_fields[1]['value']
+                    if len(text_fields) > 2:
+                        place_value = text_fields[2]['value']  # Trzecie pole tekstowe jako miejsce
+                
+                record.update({
+                    'surname': surname_value,
+                    'name': name_value,
+                    'number': number_value,
+                    'year': year_value,
+                    'place': place_value  # Teraz miejsce jest ustawiane dla krótkich rekordów
+                })
             
-            # Pierwsze dwa pola tekstowe to nazwisko i imię
-            surname_value = ''
-            name_value = ''
-            place_value = ''
+            # Generuj sformatowane uwagi ZAWSZE (rozszerz istniejące jeśli są)
+            existing_notes = record.get('notes', '').strip()
+            formatted_notes = build_formatted_notes(record)
             
-            if text_fields:
-                surname_value = text_fields[0]['value']
-                if len(text_fields) > 1:
-                    name_value = text_fields[1]['value']
-                if len(text_fields) > 2:
-                    place_value = text_fields[2]['value']  # Trzecie pole tekstowe jako miejsce
-            
-            record.update({
-                'surname': surname_value,
-                'name': name_value,
-                'number': number_value,
-                'year': year_value,
-                'place': place_value  # Teraz miejsce jest ustawiane dla krótkich rekordów
-            })
-        
-        # Generuj sformatowane uwagi ZAWSZE (rozszerz istniejące jeśli są)
-        existing_notes = record.get('notes', '').strip()
-        formatted_notes = build_formatted_notes(record)
-        
-        if formatted_notes:
-            if existing_notes and existing_notes != '-':
-                # Dodaj istniejące uwagi na końcu jeśli się różnią
-                if existing_notes not in formatted_notes:
-                    record['notes'] = f"{formatted_notes}. {existing_notes}"
+            if formatted_notes:
+                if existing_notes and existing_notes != '-':
+                    # Dodaj istniejące uwagi na końcu jeśli się różnią
+                    if existing_notes not in formatted_notes:
+                        record['notes'] = f"{formatted_notes}. {existing_notes}"
+                    else:
+                        record['notes'] = formatted_notes
                 else:
                     record['notes'] = formatted_notes
-            else:
-                record['notes'] = formatted_notes
-        
-        # Walidacja rekordu
-        validate_record_local(record)
-        records.append(record)
+            
+            # Walidacja rekordu
+            validate_record_local(record)
+            records.append(record)
+    
+    except Exception as e:
+        print(f"❌ Błąd w parse_data_local przy linii {index}: {e}")
+        print(f"   Linia: {repr(line[:100])}")
+        print(f"   Pola: {fields}")
+        raise
     
     return records
 
