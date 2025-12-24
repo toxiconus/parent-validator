@@ -85,7 +85,35 @@
 
 ---
 
-## 📊 **EXPECTED OUTCOMES**
+## � **POST-MIGRATION ENHANCEMENTS ROADMAP**
+
+### **Faza 2.1 - Core UX Enhancements (Immediate)**
+- **Session Persistence:** Auto-save to localStorage every 30s, recovery dialog on startup
+- **Change Comparison:** Keep originalRecords[], highlight modified fields
+- **Global Undo:** 50-action stack with toolbar button for peace of mind
+
+### **Faza 2.2 - Data Management & Analytics**
+- **Contextual Statistics:** Red fields counter, age distribution charts, common surnames
+- **Manual Tagging:** Color-coded tags for record organization and filtering
+- **Configurable Views:** Column selection, drag&drop reordering, saved preferences
+
+### **Faza 2.3 - Advanced Features**
+- **Mobile Card View:** Auto-switch to cards on <768px screens
+- **Advanced Export:** Modified-only, include metadata, multiple formats
+- **File Preview:** Before loading with delimiter detection and sample display
+- **Bulk Operations:** Tag all red fields, mass updates
+
+### **Implementation Priority**
+1. **Session persistence** - Prevents data loss (highest impact)
+2. **Change comparison** - Quality control for exports
+3. **Global undo** - User confidence and error recovery
+4. **Contextual stats** - Immediate data quality insights
+5. **Manual tagging** - Large dataset organization
+6. **Mobile support** - Accessibility improvement
+
+---
+
+## �📊 **EXPECTED OUTCOMES**
 
 ### **Performance Improvements**
 - **Editing Speed:** 500ms → 20ms (25x faster)

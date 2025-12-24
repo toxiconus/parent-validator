@@ -1,0 +1,67 @@
+### Opis Projektu: Scenariusz 2 – Optymalna Architektura Aplikacji "Parent Validator"
+
+**Cel główny projektu**  
+Stworzenie nowoczesnego, ergonomicznego i łatwo rozszerzalnego narzędzia do przetwarzania i walidacji rekordów metrykalnych (chrztów, zgonów, małżeństw) pochodzących z transkrypcji akt parafialnych. Aplikacja ma umożliwiać szybkie wczytywanie surowych danych TSV/TXT, inteligentną walidację względem polskich baz imion, nazwisk i miejscowości, wygodną edycję (zarówno inline, jak i modalną) oraz eksport poprawionych danych w spójnym formacie TSV.
+
+**Kluczowe założenie architektoniczne**  
+Przeglądarka jest głównym miejscem życia aplikacji – to w niej przechowywany jest cały stan danych i interfejs użytkownika. Backend (Python/Flask) pełni rolę wyłącznie usługi obliczeniowej – dostarcza zaawansowane parsowanie i walidację, ale nie zarządza stanem ani nie generuje HTML-a interfejsu.
+
+**Przepływ danych w aplikacji**
+
+1. **Wczytanie surowych danych**  
+   Użytkownik wkleja tekst lub uploaduje plik TSV/TXT. Frontend dzieli tekst na linie i wstępnie przygotowuje surowe rekordy.
+
+2. **Jednorazowe parsowanie i walidacja**  
+   Cały zestaw surowych linii wysyłany jest do backendu (/api/parse). Parser analizuje każdy rekord, rozpoznaje typ (chrzest/zgon/małżeństwo), wyciąga pola (w tym miejscowość według jasnych reguł), waliduje imiona, nazwiska i wieki względem baz danych oraz zwraca bogate obiekty JSON z metadanymi walidacyjnymi (statusy pól, kolory, sugestie).
+
+3. **Przechowywanie i praca na danych**  
+   Frontend zapisuje zwrócone rekordy w centralnym stanie aplikacji (appState.records). Od tego momentu wszystkie operacje odbywają się lokalnie w przeglądarce. Każdy rekord zawiera:
+   - dane właściwe (imię, nazwisko, wiek, miejsce itp.),
+   - metadane walidacyjne (statusy pól, typ rekordu),
+   - informację o oryginalnym tekście źródłowym i ewentualnych ręcznych poprawkach.
+
+4. **Wyświetlanie i edycja**  
+   Tabela jest zawsze renderowana przez frontend na podstawie aktualnego stanu. Użytkownik może:
+   - edytować pola bezpośrednio w komórkach tabeli (inline),
+   - otworzyć modal edycji całego rekordu (szczegółowy formularz dostosowany do typu rekordu),
+   - opcjonalnie wysłać pojedyncze zmienione pole do backendu w celu ponownej walidacji (/api/validate).
+
+5. **Eksport**  
+   Po zakończeniu pracy użytkownik eksportuje dane bezpośrednio z bieżącego stanu appState.records. Frontend buduje plik TSV o stałej, przewidywalnej strukturze kolumn (np. 20–25 kolumn, puste pola pozostają puste). Nie ma potrzeby komunikacji z backendem.
+
+**Główne korzyści tej architektury**
+- Pełna kontrola nad wyglądem i responsywnością tabeli oraz modala.
+- Błyskawiczna edycja bez opóźnień sieciowych.
+- Proste rozszerzanie o nowe typy rekordów (wystarczy dodać logikę wyświetlania i formularza w zależności od pola type).
+- Spójny i kompletny eksport niezależnie od formatu wejściowego.
+- Łatwe debugowanie – cały stan widoczny w narzędziach deweloperskich przeglądarki.
+- Możliwość przyszłego dodania filtrów, sortowania, statystyk czy widoków tematycznych.
+
+### Potencjalne ułatwienia i ulepszenia dla parsera (backend)
+
+Parser jest najcenniejszą częścią aplikacji – to on wykonuje ciężką pracę rozpoznawania i walidacji. Warto go wzmocnić kilkoma mechanizmami, które znacząco podniosą jakość wyników bez komplikowania logiki:
+
+1. **Jasna hierarchia reguł wyciągania miejscowości**  
+   Zdefiniowanie priorytetów: najpierw szukaj kolumny z słowami kluczowymi (parafia, miejscowość, m.), potem fallback do domyślnego pola (np. 3. kolumna przy krótkich formatach), na końcu regex w notatkach/uwagach. Zawsze zwracaj pole place, nawet jeśli wartość to "Nieznane" lub "Do ustalenia".
+
+2. **Automatyczne rozpoznawanie typu rekordu**  
+   Na podstawie słów kluczowych i struktury: chrzest (domyślny, słowa: ochrzcz., ur.), zgon (zm., zmarł/a, poch.), małżeństwo (ślub, zaślubieni, świadkowie). Zwracaj pole recordType z pewnością (np. confidence: high/medium/low), co pozwoli frontendowi proponować typ, ale umożliwi ręczną korektę.
+
+3. **Inteligentne sugestie i alternatywy**  
+   Dla pól wątpliwych (np. imię/nazwisko nie w bazie) zwracaj listę najbliższych dopasowań z bazy (np. "Józef" → sugestie: Józef, Józefa, Joszef). Podobnie dla miejscowości.
+
+4. **Kontekstowa walidacja wieków**  
+   Nie tylko sztywny zakres 18–80, ale dostosowany do typu rekordu i epoki (np. dla XIX w. dopuścić wyższe wieki przy zgonach) oraz relacje (wiek matki przy chrzcie < wiek dziecka + 50).
+
+5. **Obsługa wariantów pisowni i błędów transkrypcji**  
+   Normalizacja (np. ó→o, ł→l przy wyszukiwaniu w bazie), tolerancja na drobne błędy (Levenshtein distance ≤2 przy dopasowywaniu imion/nazwisk).
+
+6. **Zwrot bogatych metadanych**  
+   Dla każdego pola: status (valid/invalid/missing/suspicious), color (green/red/gray/orange), message (krótki opis problemu lub sugestia).
+
+7. **Endpoint do walidacji jednostkowej**  
+   Szybka usługa /api/validate-field, która przyjmuje typ pola, wartość i kontekst (rok, typ rekordu) i zwraca tylko status i sugestie – idealna do real-time podpowiedzi w modalu.
+
+Te ułatwienia sprawią, że parser stanie się nie tylko narzędziem walidacyjnym, ale aktywnym asystentem użytkownika, znacząco zmniejszając ilość ręcznych poprawek przy jednoczesnym zachowaniu pełnej kontroli nad danymi.
+
+Taka architektura (Scenariusz 2) daje solidną, czystą bazę pod rozwój aplikacji przez lata, bez ciągłego łatania problemów wynikających ze starego modelu backend-driven UI.

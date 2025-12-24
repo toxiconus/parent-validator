@@ -406,6 +406,50 @@ Response:
 
 ---
 
+## 🚀 **POTENCJALNE UŁATWIENIA I ULEPSZENIA**
+
+### **Optymalizacje frontend (dodatkowe usprawnienia)**
+
+8. **Cache'owanie baz danych w localStorage**  
+   Po pierwszym załadowaniu baz z backendu, przechowuj je w localStorage na 24h. Przy dużych bazach (>100k wpisów) rozważ fallback do backend walidacji dla lepszej wydajności.
+
+9. **Zarządzanie historią zmian**  
+   Przy aktywnym edytowaniu dużych zbiorów danych (10k+ rekordów) historia zmian może szybko urosnąć. Wprowadź limit max 20 zmian na rekord lub opcjonalne włączanie tej funkcji dla lepszej wydajności pamięci.
+
+10. **Elastyczny eksport TSV z wyborem kolumn**  
+    Dodaj opcje wyboru kolumn do eksportu - użytkownik może nie chcieć eksportować pól jak originalText, changeHistory czy metadanych walidacji. Ułatwi to pracę z różnymi formatami docelowymi.
+
+11. **Testy automatyczne**  
+    Dodaj proste testy jednostkowe w JavaScript (bez zewnętrznych bibliotek) dla kluczowych funkcji: updateRecord, buildTSV, validateRecordLocal. Włącz automatyczne benchmarki wydajności dla monitorowania regresji.
+
+### **Potencjalne ułatwienia i ulepszenia dla parsera (backend)**
+
+Parser jest najcenniejszą częścią aplikacji – to on wykonuje ciężką pracę rozpoznawania i walidacji. Warto go wzmocnić kilkoma mechanizmami, które znacząco podniosą jakość wyników bez komplikowania logiki:
+
+1. **Jasna hierarchia reguł wyciągania miejscowości**  
+   Zdefiniowanie priorytetów: najpierw szukaj kolumny z słowami kluczowymi (parafia, miejscowość, m.), potem fallback do domyślnego pola (np. 3. kolumna przy krótkich formatach), na końcu regex w notatkach/uwagach. Zawsze zwracaj pole place, nawet jeśli wartość to "Nieznane" lub "Do ustalenia".
+
+2. **Automatyczne rozpoznawanie typu rekordu z modelem probabilistycznym**  
+   Na podstawie słów kluczowych i struktury: chrzest (domyślny, słowa: ochrzcz., ur.), zgon (zm., zmarł/a, poch.), małżeństwo (ślub, zaślubieni, świadkowie). Zwracaj pole recordType z pewnością (np. confidence: high/medium/low), co pozwoli frontendowi proponować typ, ale umożliwi ręczną korektę.  
+   **Optymalizacja:** Zaimplementować prosty model probabilistyczny z ważonymi słowami kluczowymi dla lepszej dokładności.
+
+3. **Inteligentne sugestie i alternatywy**  
+   Dla pól wątpliwych (np. imię/nazwisko nie w bazie) zwracaj listę najbliższych dopasowań z bazy (np. "Józef" → sugestie: Józef, Józefa, Joszef). Podobnie dla miejscowości.
+
+4. **Kontekstowa walidacja wieków**  
+   Nie tylko sztywny zakres 18–80, ale dostosowany do typu rekordu i epoki (np. dla XIX w. dopuścić wyższe wieki przy zgonach) oraz relacje (wiek matki przy chrzcie < wiek dziecka + 50).
+
+5. **Obsługa wariantów pisowni i błędów transkrypcji**  
+   Normalizacja (np. ó→o, ł→l przy wyszukiwaniu w bazie), tolerancja na drobne błędy (Levenshtein distance ≤2 przy dopasowywaniu imion/nazwisk).
+
+6. **Zwrot bogatych metadanych**  
+   Dla każdego pola: status (valid/invalid/missing/suspicious), color (green/red/gray/orange), message (krótki opis problemu lub sugestia).
+
+7. **Endpoint do walidacji jednostkowej**  
+   Szybka usługa /api/validate-field, która przyjmuje typ pola, wartość i kontekst (rok, typ rekordu) i zwraca tylko status i sugestie – idealna do real-time podpowiedzi w modalu.
+
+---
+
 ## 🎯 **NASTĘPNE KROKI**
 
 1. **Rozpocząć migrację** od refaktoryzacji stanu aplikacji

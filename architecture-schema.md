@@ -328,26 +328,34 @@ function renderTable() {
 
 ## 🚀 **ROADMAP PO MIGRACJI**
 
-### **Faza 2.1 - Enhanced Features:**
+### **Faza 2.1 - Core UX Enhancements (Natychmiast po migracji):**
+- **Persistencia sesji:** Auto-zapisywanie appState do localStorage co 30s, odzyskiwanie przy starcie
+- **Tryb porównania:** Zachowaj originalRecords[], pokaż zmiany z podświetleniami
+- **Global undo:** Stack ostatnich 20-50 akcji z przyciskiem cofnij
 - Undo/Redo functionality
 - Bulk edit operations
 - Advanced filtering and search
-- Data import/export templates
 
-### **Faza 2.2 - Advanced Validation:**
+### **Faza 2.2 - Data Management & Analytics:**
+- **Statystyki kontekstowe:** Liczniki błędów, rozkład wieków, najczęstsze nazwiska
+- **System tagów:** Ręczne tagowanie rekordów z filtrami i kolorowymi paskami
+- **Konfigurowalny widok:** Wybór kolumn, drag&drop kolejności, zapis preferencji
 - Context-aware validation (wiek vs epoka)
 - Fuzzy matching for names
 - Historical name variants
-- Geographic validation
 
-### **Faza 2.3 - Collaboration:**
+### **Faza 2.3 - Advanced Features:**
+- **Tryb karta na mobile:** Automatyczne przełączanie na <768px z kartami
+- **Zaawansowany eksport:** Checkboxy dla formatów, tylko zmodyfikowane, metadane
+- **Podgląd pliku:** Mini-preview przed wczytaniem z wyborem delimitera
+- **Bulk tagging:** "Oznacz wszystkie czerwone jako do sprawdzenia"
 - Multi-user editing
 - Change tracking and comments
-- Data sharing and export
-- Integration with external databases
 
-### **Faza 2.4 - Analytics:**
+### **Faza 2.4 - Analytics & Integration:**
 - Statistical analysis
 - Data quality reports
 - Trend analysis
 - Genealogical insights
+- Data sharing and export
+- Integration with external databases

@@ -89,20 +89,63 @@
 - [ ] Performance benchmarking
 - [ ] Cross-browser compatibility
 
-### **4.2 Production Preparation**
+### **4.2 Performance Optimizations**
+- [ ] Implement localStorage caching for name databases (24h expiry)
+- [ ] Add change history limits (max 20 changes per record)
+- [ ] Implement configurable TSV export with column selection
+- [ ] Add automated testing framework for core functions
+- [ ] Implement probabilistic record type detection foundation
+
+### **4.3 Production Preparation**
 - [ ] Add feature flags for gradual rollout
 - [ ] Update documentation
 - [ ] Create migration guide
 - [ ] Prepare rollback procedures
 
-### **4.3 Release**
+### **4.4 Release**
 - [ ] Final testing with real data
 - [ ] Create v1.0.0 git tag
 - [ ] Update README and docs
 - [ ] Deploy to production
 
 ---
+## 🚀 **PHASE 2.1+: UX ENHANCEMENTS CHECKLIST**
 
+### **Faza 2.1 - Core UX Enhancements (Po migracji podstawowej)**
+- [ ] Implement session persistence with localStorage auto-save
+- [ ] Add session recovery dialog on app start
+- [ ] Create originalRecords backup for change comparison
+- [ ] Implement "Show changes" mode with highlighting
+- [ ] Add global undo system with 50-action stack
+- [ ] Add undo button to toolbar
+- [ ] Test session recovery with real data loss scenarios
+
+### **Faza 2.2 - Data Management & Analytics**
+- [ ] Implement contextual statistics (red fields, empty places, age distribution)
+- [ ] Add age distribution chart in stats panel
+- [ ] Create manual tagging system with color indicators
+- [ ] Add tag filters and bulk tagging
+- [ ] Implement configurable table view (column selection)
+- [ ] Add drag & drop column reordering
+- [ ] Save table preferences to localStorage
+- [ ] Test tag system with large datasets
+
+### **Faza 2.3 - Advanced Features**
+- [ ] Implement mobile card view (<768px auto-switch)
+- [ ] Add advanced export options (modified only, include metadata)
+- [ ] Support multiple export formats (TSV/CSV/Excel)
+- [ ] Create file preview before loading with delimiter detection
+- [ ] Add bulk tagging for red fields
+- [ ] Test mobile responsiveness
+- [ ] Test export options with various data sets
+
+### **Faza 2.4 - Analytics & Integration (Future)**
+- [ ] Advanced statistical analysis
+- [ ] Data quality reports
+- [ ] Genealogical insights
+- [ ] Multi-user collaboration features
+
+---
 ## 🎯 **SUCCESS CRITERIA CHECKLIST**
 
 ### **Functional Requirements**
