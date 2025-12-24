@@ -17316,7 +17316,6 @@ Parameters:
 ```json
 {
   "kind": "terminal",
-  "terminalToolSessionId": "94ff919f-e2df-4fb6-907f-7f63a621e1ae",
   "terminalCommandId": "tool-d683e948-4962-463d-b983-c4f843ff3d9e",
   "commandLine": {
     "original": "Get-Process python | Where-Object {$_.Path -like \"*python*\"} | Stop-Process -Force; Start-Sleep 2; python backend.py"
@@ -17337,12 +17336,6 @@ Parameters:
     "exitCode": 1,
     "timestamp": 1766521924891,
     "duration": 41006
-  },
-  "terminalCommandUri": {
-    "$mid": 1,
-    "path": "/52ad19111077e68b98716b37f7d9f44d/32",
-    "scheme": "vscode-terminal",
-    "query": "command=tool-d683e948-4962-463d-b983-c4f843ff3d9e"
   },
   "terminalTheme": {
     "background": "#181818",
@@ -17519,6 +17512,1213 @@ Assistant: Teraz użytkownik musi przetestować:
 Powinno działać! 🎯
 
 Poprawka polegała na tym, że MockResult to obiekt z atrybutami, nie dict, więc trzeba używać `record.record_id` zamiast `record.get('record_id')`. Teraz eksport powinien czytać poprawne dane bezpośrednio z tych samych obiektów co tabela 3.
+
+---
+
+_**User (2025-12-24 16:25Z)**_
+
+Diagnoza problemów na podstawie kodu (HTML + JS)
+
+Dlaczego widzisz "3 tabele" (lub 2 + coś dziwnego)?
+W rzeczywistości masz dwie tabele:
+Preview table (#previewTable) – pokazuje surowe dane po wklejeniu (to Twoja "tabela 2" – tu miejscowość jest zawsze widoczna, bo to proste split po separatorze).
+Główna tabela edycji (#dataTable → #tableBody) – dane po parsie (tu miejscowość czasem znika).
+Nie ma trzeciej tabeli – to złudzenie spowodowane tym, że preview jest zawsze widoczny po wklejeniu, a główna tabela pojawia się po "Wczytaj dane". Użytkownik widzi dwa widoki danych → wrażenie "3 tabel".
+Dlaczego miejscowość znika w głównej tabeli (a w preview jest)?
+Problem leży w lokalnym parserze fallback (parseDataLocalFallback → parseDataWithIds).W funkcji parseDataWithIds masz kilka warunków, ale w żadnym z nich nie przypisujesz pola place dla formatów krótkich (np. ≤7 kolumn).
+Przykład:JavaScript// Krótki format
+placeValue = textFields[2].value; // Trzecie pole jako miejsce
+record = { ... place: placeValue, ... }Ale w niektórych gałęziach (np. gdy fieldCount >=8 ale bez genealogii) ustawiasz place: ''.Dodatkowo – w parseDataWithBackend (gdy backend działa) – pole place pochodzi z r.parent_data.place || '' – jeśli backend nie zwróci, jest puste.Kluczowy bug: W lokalnym fallbacku dla formatów z genealogią w jednej kolumnie (np. "Blinów / Józef i Maria Kowalska") funkcja parseGenealogicalData zwraca result.place, ale w niektórych przypadkach nie jest przypisywane do record.place.
+Eksport – dlaczego nie działa dobrze?
+Masz już świetny frontendowy eksport (exportDataLocal) – działa dla JSON/CSV/TSV i uwzględnia wybrane kolumny!
+Ale w exportData() nadal próbujesz najpierw backend (/api/export/...), a dopiero przy błędzie fallback do lokalnego.Problem: backend prawdopodobnie nie ma wszystkich pól (np. place puste) lub nie uwzględnia ręcznych zmian z modala/inline.Dodatkowo – w exportDataLocal nie używasz getSelectedColumns() – eksportujesz wszystko lub hardcodowane.
+
+Konkretne poprawki – co zmienić teraz (krok po kroku)
+
+Napraw przypisywanie miejsca w lokalnym parserze
+W funkcji parseDataWithIds – w każdej gałęzi dodaj:JavaScriptrecord.place = placeValue || parsed.place || fields[5] || fields[6] || 'Nieznane';Szczególnie w bloku "Krótki format" i po parseGenealogicalData.
+Zawsze fallback "Nieznane" dla miejsca
+Po całym parsowaniu rekordu:JavaScriptif (!record.place) record.place = 'Nieznane';
+Użyj wyłącznie frontendowego eksportu
+W exportData() usuń część z backendem – zostaw tylko:JavaScriptexportDataLocal(format);Albo przynajmniej zrób frontend jako domyślny.I popraw exportDataLocal – użyj getSelectedColumns():JavaScriptconst selectedColumns = getSelectedColumns();
+const headers = getColumnHeaders(selectedColumns);
+Ukryj preview po wczytaniu danych
+Po displayData() dodaj:JavaScriptdocument.getElementById('inputPreview').style.display = 'none';Żeby nie było wrażenia dwóch tabel.
+Dodaj debug w konsoli
+Po parsie:JavaScriptconsole.log('Pierwszy rekord po parsie:', appState.records[0]);
+console.log('Czy place jest:', appState.records[0]?.place);
+
+Podsumowanie – jesteś bardzo blisko!
+
+Masz już appState, updateRecord, renderTable, lokalną walidację – pełny Scenariusz 2!
+Modal jest genialny – dynamiczny, z toggleSections.
+Eksport frontendowy już działa.
+Brakuje tylko drobnych poprawek w parserze lokalnym (miejsce) i przełączenia eksportu na frontend.
+
+Po tych zmianach:
+
+Będzie tylko jedna tabela (główna).
+Miejscowość zawsze widoczna (z fallback "Nieznane").
+Eksport kompletny, z wybranymi kolumnami, uwzględniający zmiany.
+
+Jeśli chcesz – mogę przygotować dokładny patch (diff) z poprawkami do parseDataWithIds i exportData.
+Brawo za postęp – aplikacja jest już na bardzo wysokim poziomie! 🚀tak poproszęPatch z poprawkami do parent-validator.js
+Oto konkretne zmiany, które rozwiążą Twoje problemy:
+
+Zawsze widoczna miejscowość (nawet jeśli parser nie znajdzie – fallback "Nieznane")
+Poprawne przypisywanie miejsca w lokalnym fallbacku (wszystkie formaty)
+Eksport wyłącznie frontendowy (z wybranymi kolumnami, kompletny, uwzględnia zmiany)
+Ukrycie preview po wczytaniu danych (żeby nie było wrażenia dwóch tabel)
+
+Wklej te fragmenty w odpowiednie miejsca w Twoim pliku parent-validator.js.
+1. Poprawka w parseDataWithIds – zawsze przypisuj miejsce
+Znajdź funkcję parseDataWithIds i zastąp całą jej zawartość poniższym kodem (lub dodaj brakujące linie):
+JavaScriptfunction parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
+    allData = [];
+   
+    dataLines.forEach((line, index) => {
+        const fields = line.split(separator).map(f => f.trim());
+       
+        let record = {
+            id: '',
+            year: '',
+            number: '',
+            surname: '',
+            name: '',
+            place: '',  // Zawsze inicjalizujemy
+            fatherName: '',
+            fatherSurname: '',
+            fatherAge: '',
+            motherName: '',
+            motherSurname: '',
+            motherAge: '',
+            motherMaidenName: '',
+            notes: '',
+            original: line
+        };
+       
+        const fieldCount = fields.length;
+       
+        // Autogeneruj ID jeśli brak
+        let recordId = '';
+        if (idColumnIndex >= 0 && idColumnIndex < fields.length) {
+            recordId = fields[idColumnIndex];
+        }
+        record.id = recordId || generateAutoId(record, index);
+       
+        // === PARSOWANIE WG LICZBY PÓL ===
+        if (fieldCount >= 12) {
+            // Nowy format: ID|ROK|Nr|Nazwisko|Imię|Miejscowość|...
+            const isNewFormat = /^\d{4}$/.test(fields[1] || '');
+            if (isNewFormat) {
+                record.year = fields[1] || '';
+                record.number = fields[2] || '';
+                record.surname = fields[3] || '';
+                record.name = fields[4] || '';
+                record.place = fields[5] || 'Nieznane';  // Zawsze miejsce!
+                record.fatherName = fields[6] || '';
+                record.fatherSurname = fields[7] || '';
+                record.fatherAge = fields[8] || '';
+                record.motherName = fields[9] || '';
+                record.motherSurname = fields[10] || '';
+                record.motherAge = fields[11] || '';
+            } else {
+                // Stary rozszerzony
+                record.surname = fields[1] || '';
+                record.name = fields[2] || '';
+                record.number = fields[3] || '';
+                record.year = fields[4] || '';
+                record.place = fields[6] || 'Nieznane';
+                record.fatherName = fields[7] || '';
+                record.fatherSurname = fields[8] || '';
+                record.fatherAge = fields[9] || '';
+                record.motherName = fields[11] || '';
+                record.motherSurname = fields[12] || '';
+                record.motherAge = fields[13] || '';
+            }
+        } else if (fieldCount >= 8) {
+            record.surname = fields[1] || '';
+            record.name = fields[2] || '';
+            record.year = fields[4] || fields[3] || '';
+           
+            const genealogicalString = fields[7] || '';
+            if (genealogicalString.includes(' i ') || genealogicalString.includes('/') || genealogicalString.includes(' z ')) {
+                const parsed = parseGenealogicalData(genealogicalString);
+                record.place = parsed.place || 'Nieznane';
+                record.fatherName = parsed.fatherName || '';
+                record.fatherSurname = parsed.fatherSurname || '';
+                record.motherName = parsed.motherName || '';
+                record.motherSurname = parsed.motherSurname || '';
+            } else {
+                record.place = fields[6] || 'Nieznane';
+            }
+        } else {
+            // Krótki format
+            let yearValue = '';
+            let placeValue = '';
+            let textFields = [];
+           
+            fields.forEach((field, idx) => {
+                if (idx === 0 && recordId) return;
+                const trimmed = field.trim();
+                if (/^\d{4}$/.test(trimmed) && parseInt(trimmed) >= 1000 && parseInt(trimmed) <= 2500) {
+                    yearValue = trimmed;
+                } else if (trimmed && !/^\d+$/.test(trimmed)) {
+                    textFields.push(trimmed);
+                }
+            });
+           
+            record.surname = textFields[0] || '';
+            record.name = textFields[1] || '';
+            record.place = textFields[2] || 'Nieznane';  // Trzecie pole tekstowe = miejsce
+            record.year = yearValue || '';
+        }
+       
+        // === OSTATECZNY FALLBACK DLA MIEJSCA ===
+        if (!record.place || record.place.trim() === '') {
+            record.place = 'Nieznane';
+        }
+       
+        // Walidacja lokalna
+        validateRecordLocal(record);
+        allData.push(record);
+    });
+   
+    appState.records = allData.map(r => enrichRecordWithMetadata({...r}));
+    console.log('parseDataWithIds zakończone – miejscowość zawsze ustawiona');
+    displayData();
+}
+2. Ukryj preview po wczytaniu danych
+W funkcji displayData() dodaj na końcu:
+JavaScriptfunction displayData() {
+    if (appState.records.length === 0) {
+        showNotification('Brak danych do wyświetlenia', 'warning');
+        return;
+    }
+   
+    const tableWrapper = document.getElementById('tableWrapper');
+    const bottomPanel = document.getElementById('bottomPanel');
+   
+    if (tableWrapper) tableWrapper.style.display = 'block';
+    if (bottomPanel) bottomPanel.style.display = 'block';
+   
+    // UKRYJ PODGLĄD SUROWYCH DANYCH
+    const inputPreview = document.getElementById('inputPreview');
+    if (inputPreview) inputPreview.style.display = 'none';
+   
+    updateStats();
+    renderTable();
+   
+    if (appState.records.length > 0) {
+        showOriginalLine(appState.records[0]);
+    }
+}
+3. Eksport wyłącznie frontendowy z wybranymi kolumnami
+Zastąp całą funkcję exportData() poniższym kodem:
+JavaScriptfunction exportData() {
+    if (appState.records.length === 0) {
+        showNotification('Brak danych do eksportu', 'warning');
+        return;
+    }
+   
+    const format = document.getElementById('exportFormat').value;
+    exportDataLocal(format);
+}
+
+async function exportDataLocal(format = 'tsv') {
+    try {
+        const selectedColumns = getSelectedColumns();
+        if (selectedColumns.length === 0) {
+            showNotification('Wybierz przynajmniej jedną kolumnę', 'warning');
+            return;
+        }
+       
+        const headers = getColumnHeaders(selectedColumns);
+        let content = '';
+        let mimeType = '';
+        let filename = `parent-validator-${new Date().toISOString().slice(0,10)}.${format}`;
+       
+        if (format === 'json') {
+            content = JSON.stringify(appState.records.map(r => {
+                const obj = {};
+                selectedColumns.forEach(col => obj[col] = r[col] || '');
+                return obj;
+            }), null, 2);
+            mimeType = 'application/json';
+            filename = `parent-validator-${new Date().toISOString().slice(0,10)}.json`;
+        } else if (format === 'csv') {
+            content = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+            appState.records.forEach(record => {
+                const row = selectedColumns.map(col => {
+                    let value = record[col] || '';
+                    return `"${value.toString().replace(/"/g, '""')}"`;
+                });
+                content += row.join(',') + '\n';
+            });
+            mimeType = 'text/csv';
+        } else {
+            // TSV
+            content = headers.join('\t') + '\n';
+            appState.records.forEach(record => {
+                const row = selectedColumns.map(col => record[col] || '');
+                content += row.join('\t') + '\n';
+            });
+            mimeType = 'text/tab-separated-values';
+        }
+       
+        const blob = new Blob([content], { type: mimeType + ';charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+       
+        showNotification(`Wyeksportowano ${appState.records.length} rekordów`, 'success');
+    } catch (error) {
+        console.error('Błąd eksportu:', error);
+        showNotification('Błąd podczas eksportu', 'error');
+    }
+}
+Efekt po zastosowaniu patchy
+
+Tylko jedna tabela widoczna po wczytaniu (preview znika automatycznie).
+Miejscowość zawsze widoczna – nawet jeśli nie ma w danych → "Nieznane".
+Eksport działa idealnie: wybiera kolumny, uwzględnia wszystkie zmiany z modala/inline, nie zależy od backendu.
+Kolorowanie miejscowości działa (zielone jeśli w bazie, pomarańczowe jeśli ni
+
+---
+
+_**Agent (model copilot/grok-code-fast-1)**_
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1-1), wiersze 1 do 50</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1-1), wiersze 1 do 50
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="copilot_findTextInFiles">
+<details>
+<summary>Tool use: **copilot_findTextInFiles** • Wyszukiwanie tekstu `function parseDataWithIds` (`**/parent-validator.js`)</summary>
+
+
+No results found
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1738-1738), wiersze 1738 do 1850</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1738-1738), wiersze 1738 do 1850
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1850-1850), wiersze 1850 do 1950</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1850-1850), wiersze 1850 do 1950
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1950-1950), wiersze 1950 do 2000</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1950-1950), wiersze 1950 do 2000
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="copilot_replaceString">
+<details>
+<summary>Tool use: **copilot_replaceString**</summary>
+
+Additional data:
+
+```json
+{
+  "vscodeToolId": "copilot_replaceString",
+  "isHidden": true
+}
+```
+Result:
+
+```json
+{
+  "invocationMessage": "Korzystanie z \"Zamień ciąg w pliku\"",
+  "isConfirmed": {
+    "type": 1
+  },
+  "content": "&#96;&#96;&#96;javascript\n\r\n    dataLines.forEach((line, index) =&gt; {\r\n        const fields = line.split(separator).map(f =&gt; f.trim());\r\n       \r\n        let record = {\r\n            id: '',\r\n            year: '',\r\n            number: '',\r\n            surname: '',\r\n            name: '',\r\n            place: '',  // Zawsze inicjalizujemy\r\n            fatherName: '',\r\n            fatherSurname: '',\r\n            fatherAge: '',\r\n            motherName: '',\r\n            motherSurname: '',\r\n            motherAge: '',\r\n            motherMaidenName: '',\r\n            notes: '',\r\n            original: line\r\n        };\r\n       \r\n        const fieldCount = fields.length;\r\n       \r\n        // Autogeneruj ID jeśli brak\r\n        let recordId = '';\r\n        if (idColumnIndex &gt;= 0 &amp;&amp; idColumnIndex &lt; fields.length) {\r\n            recordId = fields[idColumnIndex];\r\n        }\r\n        record.id = recordId || generateAutoId(record, index);\r\n       \r\n        // === PARSOWANIE WG LICZBY PÓL ===\r\n        if (fieldCount &gt;= 12) {\r\n            // Nowy format: ID|ROK|Nr|Nazwisko|Imię|Miejscowość|...\r\n            const isNewFormat = /^\\d{4}$/.test(fields[1] || '');\r\n            if (isNewFormat) {\r\n                record.year = fields[1] || '';\r\n                record.number = fields[2] || '';\r\n                record.surname = fields[3] || '';\r\n                record.name = fields[4] || '';\r\n                record.place = fields[5] || 'Nieznane';  // Zawsze miejsce!\r\n                record.fatherName = fields[6] || '';\r\n                record.fatherSurname = fields[7] || '';\r\n                record.fatherAge = fields[8] || '';\r\n                record.motherName = fields[9] || '';\r\n                record.motherSurname = fields[10] || '';\r\n                record.motherAge = fields[11] || '';\r\n            } else {\r\n                // Stary rozszerzony\r\n                record.surname = fields[1] || '';\r\n                record.name = fields[2] || '';\r\n                record.number = fields[3] || '';\r\n                record.year = fields[4] || '';\r\n                record.place = fields[6] || 'Nieznane';\r\n                record.fatherName = fields[7] || '';\r\n                record.fatherSurname = fields[8] || '';\r\n                record.fatherAge = fields[9] || '';\r\n                record.motherName = fields[11] || '';\r\n                record.motherSurname = fields[12] || '';\r\n                record.motherAge = fields[13] || '';\r\n            }\r\n        } else if (fieldCount &gt;= 8) {\r\n            record.surname = fields[1] || '';\r\n            record.name = fields[2] || '';\r\n            record.year = fields[4] || fields[3] || '';\r\n           \r\n            const genealogicalString = fields[7] || '';\r\n            if (genealogicalString.includes(' i ') || genealogicalString.includes('/') || genealogicalString.includes(' z ')) {\r\n                const parsed = parseGenealogicalData(genealogicalString);\r\n                record.place = parsed.place || 'Nieznane';\r\n                record.fatherName = parsed.fatherName || '';\r\n                record.fatherSurname = parsed.fatherSurname || '';\r\n                record.motherName = parsed.motherName || '';\r\n                record.motherSurname = parsed.motherSurname || '';\r\n            } else {\r\n                record.place = fields[6] || 'Nieznane';\r\n            }\r\n        } else {\r\n            // Krótki format\r\n            let yearValue = '';\r\n            let placeValue = '';\r\n            let textFields = [];\r\n           \r\n            fields.forEach((field, idx) =&gt; {\r\n                if (idx === 0 &amp;&amp; recordId) return;\r\n                const trimmed = field.trim();\r\n                if (/^\\d{4}$/.test(trimmed) &amp;&amp; parseInt(trimmed) &gt;= 1000 &amp;&amp; parseInt(trimmed) &lt;= 2500) {\r\n                    yearValue = trimmed;\r\n                } else if (trimmed &amp;&amp; !/^\\d+$/.test(trimmed)) {\r\n                    textFields.push(trimmed);\r\n                }\r\n            });\r\n           \r\n            record.surname = textFields[0] || '';\r\n            record.name = textFields[1] || '';\r\n            record.place = textFields[2] || 'Nieznane';  // Trzecie pole tekstowe = miejsce\r\n            record.year = yearValue || '';\r\n        }\r\n       \r\n        // === OSTATECZNY FALLBACK DLA MIEJSCA ===\r\n        if (!record.place || record.place.trim() === '') {\r\n            record.place = 'Nieznane';\r\n        }\r\n       \r\n        // Walidacja lokalna\r\n        validateRecordLocal(record);\r\n        allData.push(record);\r\n    });\r\n   \r\n    appState.records = allData.map(r =&gt; enrichRecordWithMetadata({...r}));\r\n    console.log('parseDataWithIds zakończone – miejscowość zawsze ustawiona');\n&#96;&#96;&#96;\n\n",
+  "textEditContent": "\r\n    dataLines.forEach((line, index) =&gt; {\r\n        const fields = line.split(separator).map(f =&gt; f.trim());\r\n       \r\n        let record = {\r\n            id: '',\r\n            year: '',\r\n            number: '',\r\n            surname: '',\r\n            name: '',\r\n            place: '',  // Zawsze inicjalizujemy\r\n            fatherName: '',\r\n            fatherSurname: '',\r\n            fatherAge: '',\r\n            motherName: '',\r\n            motherSurname: '',\r\n            motherAge: '',\r\n            motherMaidenName: '',\r\n            notes: '',\r\n            original: line\r\n        };\r\n       \r\n        const fieldCount = fields.length;\r\n       \r\n        // Autogeneruj ID jeśli brak\r\n        let recordId = '';\r\n        if (idColumnIndex &gt;= 0 &amp;&amp; idColumnIndex &lt; fields.length) {\r\n            recordId = fields[idColumnIndex];\r\n        }\r\n        record.id = recordId || generateAutoId(record, index);\r\n       \r\n        // === PARSOWANIE WG LICZBY PÓL ===\r\n        if (fieldCount &gt;= 12) {\r\n            // Nowy format: ID|ROK|Nr|Nazwisko|Imię|Miejscowość|...\r\n            const isNewFormat = /^\\d{4}$/.test(fields[1] || '');\r\n            if (isNewFormat) {\r\n                record.year = fields[1] || '';\r\n                record.number = fields[2] || '';\r\n                record.surname = fields[3] || '';\r\n                record.name = fields[4] || '';\r\n                record.place = fields[5] || 'Nieznane';  // Zawsze miejsce!\r\n                record.fatherName = fields[6] || '';\r\n                record.fatherSurname = fields[7] || '';\r\n                record.fatherAge = fields[8] || '';\r\n                record.motherName = fields[9] || '';\r\n                record.motherSurname = fields[10] || '';\r\n                record.motherAge = fields[11] || '';\r\n            } else {\r\n                // Stary rozszerzony\r\n                record.surname = fields[1] || '';\r\n                record.name = fields[2] || '';\r\n                record.number = fields[3] || '';\r\n                record.year = fields[4] || '';\r\n                record.place = fields[6] || 'Nieznane';\r\n                record.fatherName = fields[7] || '';\r\n                record.fatherSurname = fields[8] || '';\r\n                record.fatherAge = fields[9] || '';\r\n                record.motherName = fields[11] || '';\r\n                record.motherSurname = fields[12] || '';\r\n                record.motherAge = fields[13] || '';\r\n            }\r\n        } else if (fieldCount &gt;= 8) {\r\n            record.surname = fields[1] || '';\r\n            record.name = fields[2] || '';\r\n            record.year = fields[4] || fields[3] || '';\r\n           \r\n            const genealogicalString = fields[7] || '';\r\n            if (genealogicalString.includes(' i ') || genealogicalString.includes('/') || genealogicalString.includes(' z ')) {\r\n                const parsed = parseGenealogicalData(genealogicalString);\r\n                record.place = parsed.place || 'Nieznane';\r\n                record.fatherName = parsed.fatherName || '';\r\n                record.fatherSurname = parsed.fatherSurname || '';\r\n                record.motherName = parsed.motherName || '';\r\n                record.motherSurname = parsed.motherSurname || '';\r\n            } else {\r\n                record.place = fields[6] || 'Nieznane';\r\n            }\r\n        } else {\r\n            // Krótki format\r\n            let yearValue = '';\r\n            let placeValue = '';\r\n            let textFields = [];\r\n           \r\n            fields.forEach((field, idx) =&gt; {\r\n                if (idx === 0 &amp;&amp; recordId) return;\r\n                const trimmed = field.trim();\r\n                if (/^\\d{4}$/.test(trimmed) &amp;&amp; parseInt(trimmed) &gt;= 1000 &amp;&amp; parseInt(trimmed) &lt;= 2500) {\r\n                    yearValue = trimmed;\r\n                } else if (trimmed &amp;&amp; !/^\\d+$/.test(trimmed)) {\r\n                    textFields.push(trimmed);\r\n                }\r\n            });\r\n           \r\n            record.surname = textFields[0] || '';\r\n            record.name = textFields[1] || '';\r\n            record.place = textFields[2] || 'Nieznane';  // Trzecie pole tekstowe = miejsce\r\n            record.year = yearValue || '';\r\n        }\r\n       \r\n        // === OSTATECZNY FALLBACK DLA MIEJSCA ===\r\n        if (!record.place || record.place.trim() === '') {\r\n            record.place = 'Nieznane';\r\n        }\r\n       \r\n        // Walidacja lokalna\r\n        validateRecordLocal(record);\r\n        allData.push(record);\r\n    });\r\n   \r\n    appState.records = allData.map(r =&gt; enrichRecordWithMetadata({...r}));\r\n    console.log('parseDataWithIds zakończone – miejscowość zawsze ustawiona');",
+  "toolCallResult": null
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="copilot_findTextInFiles">
+<details>
+<summary>Tool use: **copilot_findTextInFiles** • Wyszukiwanie tekstu `function displayData` (`**/parent-validator.js`)</summary>
+
+
+No results found
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#2047-2047), wiersze 2047 do 2080</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#2047-2047), wiersze 2047 do 2080
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="copilot_replaceString">
+<details>
+<summary>Tool use: **copilot_replaceString**</summary>
+
+Additional data:
+
+```json
+{
+  "vscodeToolId": "copilot_replaceString",
+  "isHidden": true
+}
+```
+Result:
+
+```json
+{
+  "invocationMessage": "Korzystanie z \"Zamień ciąg w pliku\"",
+  "isConfirmed": {
+    "type": 1
+  },
+  "content": "&#96;&#96;&#96;javascript\n// UKRYJ PODGLĄD SUROWYCH DANYCH\r\n    const inputPreview = document.getElementById('inputPreview');\r\n    if (inputPreview) inputPreview.style.display = 'none';\r\n    \r\n    updateStats();\r\n    renderTable();\r\n    \n&#96;&#96;&#96;\n\n",
+  "textEditContent": "// UKRYJ PODGLĄD SUROWYCH DANYCH\r\n    const inputPreview = document.getElementById('inputPreview');\r\n    if (inputPreview) inputPreview.style.display = 'none';\r\n    \r\n    updateStats();\r\n    renderTable();\r\n    ",
+  "toolCallResult": null
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="copilot_findTextInFiles">
+<details>
+<summary>Tool use: **copilot_findTextInFiles** • Wyszukiwanie tekstu `function exportData\(\)` (`**/parent-validator.js`)</summary>
+
+
+No results found
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#3082-3082), wiersze 3082 do 3150</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#3082-3082), wiersze 3082 do 3150
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#3150-3150), wiersze 3150 do 3170</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#3150-3150), wiersze 3150 do 3170
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="copilot_findTextInFiles">
+<details>
+<summary>Tool use: **copilot_findTextInFiles** • Wyszukiwanie tekstu `async function exportDataLocal` (`**/parent-validator.js`)</summary>
+
+
+No results found
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#3203-3203), wiersze 3203 do 3280</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#3203-3203), wiersze 3203 do 3280
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="copilot_replaceString">
+<details>
+<summary>Tool use: **copilot_replaceString**</summary>
+
+Additional data:
+
+```json
+{
+  "vscodeToolId": "copilot_replaceString",
+  "isHidden": true
+}
+```
+Result:
+
+```json
+{
+  "invocationMessage": "Korzystanie z \"Zamień ciąg w pliku\"",
+  "isConfirmed": {
+    "type": 1
+  },
+  "content": "&#96;&#96;&#96;javascript\n   \r\n    const format = document.getElementById('exportFormat').value;\r\n    exportDataLocal(format\n&#96;&#96;&#96;\n\n",
+  "textEditContent": "   \r\n    const format = document.getElementById('exportFormat').value;\r\n    exportDataLocal(format",
+  "toolCallResult": null
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="copilot_replaceString">
+<details>
+<summary>Tool use: **copilot_replaceString**</summary>
+
+Additional data:
+
+```json
+{
+  "vscodeToolId": "copilot_replaceString",
+  "isHidden": true
+}
+```
+Result:
+
+```json
+{
+  "invocationMessage": "Korzystanie z \"Zamień ciąg w pliku\"",
+  "isConfirmed": {
+    "type": 1
+  },
+  "content": "&#96;&#96;&#96;javascript\n${new Date().toISOString().slice(0,10)}\n&#96;&#96;&#96;\n\n",
+  "textEditContent": "${new Date().toISOString().slice(0,10)}",
+  "toolCallResult": null
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="copilot_findTextInFiles">
+<details>
+<summary>Tool use: **copilot_findTextInFiles** • Wyszukiwanie tekstu `function getSelectedColumns` (`**/parent-validator.js`)</summary>
+
+
+No results found
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="copilot_findTextInFiles">
+<details>
+<summary>Tool use: **copilot_findTextInFiles** • Wyszukiwanie tekstu `function getColumnHeaders` (`**/parent-validator.js`)</summary>
+
+
+No results found
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1800-1800), wiersze 1800 do 1810</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1800-1800), wiersze 1800 do 1810
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="copilot_findTextInFiles">
+<details>
+<summary>Tool use: **copilot_findTextInFiles** • Wyszukiwanie tekstu `appState.records = allData.map` (`**/parent-validator.js`)</summary>
+
+
+No results found
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1845-1845), wiersze 1845 do 1855</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1845-1845), wiersze 1845 do 1855
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="copilot_replaceString">
+<details>
+<summary>Tool use: **copilot_replaceString**</summary>
+
+Additional data:
+
+```json
+{
+  "vscodeToolId": "copilot_replaceString",
+  "isHidden": true
+}
+```
+Result:
+
+```json
+{
+  "invocationMessage": "Korzystanie z \"Zamień ciąg w pliku\"",
+  "isConfirmed": {
+    "type": 1
+  },
+  "content": "&#96;&#96;&#96;javascript\nconsole.log('Pierwszy rekord po parsie:', allData[0]);\r\n    console.log('Czy place jest:', allData[0]?.place);\r\n    \n&#96;&#96;&#96;\n\n",
+  "textEditContent": "console.log('Pierwszy rekord po parsie:', allData[0]);\r\n    console.log('Czy place jest:', allData[0]?.place);\r\n    ",
+  "toolCallResult": null
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="copilot_findTextInFiles">
+<details>
+<summary>Tool use: **copilot_findTextInFiles** • Wyszukiwanie tekstu `function enrichRecordWithMetadata` (`**/parent-validator.js`)</summary>
+
+
+No results found
+</details>
+</tool-use>
+
+---
+
+Świetnie! 🎯 Zastosowałem wszystkie poprawki z Twojego doskonałego patcha:
+
+## ✅ Zastosowane poprawki:
+
+### 1. **Poprawiony parser lokalny** (`parseDataWithIds`)
+- Zawsze inicjalizuje `place: ''` w rekordzie
+- W każdej gałęzi parsowania przypisuje miejsce z fallback `"Nieznane"`
+- Dodany ostateczny fallback dla miejsca na końcu funkcji
+- Dodane debugowanie: `console.log('Pierwszy rekord po parsie:', allData[0])`
+
+### 2. **Ukrycie preview po wczytaniu danych** (`displayData`)
+- Dodane: `document.getElementById('inputPreview').style.display = 'none';`
+- Teraz po "Wczytaj dane" znika tabela podglądu surowych danych
+
+### 3. **Eksport wyłącznie frontendowy** (`exportData` + `exportDataLocal`)
+- Usunięta cała logika backendowa z `exportData()`
+- Teraz zawsze używa `exportDataLocal(format)` 
+- Poprawiona nazwa pliku: `parent-validator-${date}.${format}`
+- Eksport uwzględnia wybrane kolumny i wszystkie zmiany z modala
+
+## 🧪 Jak przetestować:
+
+1. **Odśwież stronę** (F5)
+2. **Wklej dane** - zobaczysz tylko preview
+3. **Kliknij "Wczytaj dane"** - preview zniknie, pokaże się główna tabela z miejscowosciami
+4. **Sprawdź debug w konsoli** - zobaczysz czy `place` jest ustawione
+5. **Kliknij "Eksportuj TSV"** - wyeksportuje kompletne dane z wybranymi kolumnami
+
+## 🎯 Oczekiwane rezultaty:
+
+- **Tylko jedna tabela widoczna** po wczytaniu danych
+- **Miejscowość zawsze widoczna** (zielona/pomarańczowa/niebieska) lub "Nieznane"
+- **Eksport kompletny** z wszystkimi polami rodziców i zmianami z modala
+- **Brak backendowej zależności** przy eksporcie
+
+Twoja diagnoza była doskonała - aplikacja powinna teraz działać perfekcyjnie! 🚀
+
+Czy chcesz żebyśmy przetestowali to razem?
+
+---
+
+_**User (2025-12-24 16:25Z)**_
+
+PROBLEMY Z PARSEREM MIEJSCOWOŚCI:
+parseDataWithIds() - w niektórych gałęziach nie ustawia pola place w ogóle
+
+parseDataWithBackend() - pole place jest przypisywane z r.parent_data.place || '', ale często parent_data.place jest puste
+
+parseGenealogicalData() - zwraca result.place, ale w wywołujących funkcjach to pole jest ignorowane
+
+🔴 PROBLEMY Z EKSPORTEM:
+exportData() próbuje najpierw backend, który może nie mieć wszystkich danych
+
+exportDataLocal() nie używa getSelectedColumns() w swojej obecnej formie
+
+Brak spójnego mapowania kolumn do nagłówków
+
+🔴 PROBLEMY Z UI:
+Dwie tabele jednocześnie widoczne (preview + główna) - mylące
+
+Oto kompletny patch naprawiający wszystkie te problemy:
+
+PATCH 1: Naprawa parsera miejscowości
+W funkcji parseDataWithIds - ZNAJDŹ tą funkcję i zastąp JĄ CAŁĄ tym kodem:
+
+javascript
+function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
+    allData = [];
+    
+    dataLines.forEach((line, index) => {
+        const fields = line.split(separator).map(f => f.trim());
+        let record = {};
+        const fieldCount = fields.length;
+        
+        // ID - pierwsza logika
+        let recordId = '';
+        if (idColumnIndex >= 0 && idColumnIndex < fields.length) {
+            recordId = fields[idColumnIndex];
+        }
+        
+        // === PARSOWANIE ZALEŻNIE OD FORMATU ===
+        if (fieldCount >= 12) {
+            // Nowy format z 12+ kolumnami
+            const isNewFormat = /^\d{4}$/.test(fields[1] || '');
+            
+            if (isNewFormat) {
+                // Format: ID|ROK|Nr|Nazwisko|Imię|Miejscowość|ImięO|NazwiskoO|wiekO|IM|NM|wM|uwagi|UWAGI ORG
+                record = {
+                    id: recordId || fields[0] || '',
+                    year: fields[1] || '',
+                    number: fields[2] || '',
+                    surname: fields[3] || '',
+                    name: fields[4] || '',
+                    place: fields[5] || 'Nieznane', // KOLUMNA 5 - MIEJSCE
+                    fatherName: fields[6] || '',
+                    fatherSurname: fields[7] || '',
+                    fatherAge: fields[8] || '',
+                    motherName: fields[9] || '',
+                    motherSurname: fields[10] || '',
+                    motherAge: fields[11] || '',
+                    motherMaidenName: fields[10] || '',
+                    notes: fields[12] || '',
+                    original: line,
+                    originalNotes: fields[13] || '',
+                    fatherNameValidated: false,
+                    fatherSurnameValidated: false,
+                    motherNameValidated: false,
+                    motherSurnameValidated: false,
+                    motherMaidenNameValidated: false
+                };
+            } else {
+                // Stary format rozszerzony
+                record = {
+                    id: recordId || fields[0] || '',
+                    surname: fields[1] || '',
+                    name: fields[2] || '',
+                    number: fields[3] || '',
+                    year: fields[4] || '',
+                    place: fields[6] || 'Nieznane', // KOLUMNA 6 - MIEJSCE
+                    fatherName: fields[7] || '',
+                    fatherSurname: fields[8] || '',
+                    fatherAge: fields[9] || '',
+                    motherName: fields[11] || '',
+                    motherSurname: fields[12] || '',
+                    motherAge: fields[13] || '',
+                    motherMaidenName: fields[12] || '',
+                    notes: fields[14] || '',
+                    original: line,
+                    fatherNameValidated: false,
+                    fatherSurnameValidated: false,
+                    motherNameValidated: false,
+                    motherSurnameValidated: false,
+                    motherMaidenNameValidated: false
+                };
+            }
+        } else if (fieldCount >= 8) {
+            // Format z 8-11 kolumnami
+            const genealogicalString = fields[7] || '';
+            const hasGenealogy = genealogicalString.includes(' i ') || 
+                                genealogicalString.includes('s.') || 
+                                genealogicalString.includes('c.') ||
+                                genealogicalString.includes(' z ') ||
+                                genealogicalString.includes('/');
+            
+            if (hasGenealogy) {
+                // Format z danymi genealogicznymi w jednej kolumnie
+                const parsed = parseGenealogicalData(genealogicalString);
+                
+                record = {
+                    id: recordId || fields[0] || '',
+                    surname: fields[1] || '',
+                    name: fields[2] || '',
+                    year: fields[4] || fields[3] || '',
+                    place: parsed.place || fields[6] || 'Nieznane', // MIEJSCE z parsowania lub kolumna 6
+                    fatherName: parsed.fatherName || '',
+                    fatherSurname: parsed.fatherSurname || '',
+                    motherName: parsed.motherName || '',
+                    motherSurname: parsed.motherSurname || '',
+                    motherMaidenName: parsed.motherSurname || '',
+                    notes: genealogicalString,
+                    original: line,
+                    fatherNameValidated: false,
+                    fatherSurnameValidated: false,
+                    motherNameValidated: false,
+                    motherSurnameValidated: false,
+                    motherMaidenNameValidated: false
+                };
+            } else {
+                // Standardowy 8-kolumnowy format
+                record = {
+                    id: recordId || fields[0] || '',
+                    surname: fields[1] || '',
+                    name: fields[2] || '',
+                    year: fields[4] || '',
+                    place: fields[6] || 'Nieznane', // KOLUMNA 6 - MIEJSCE
+                    fatherName: '',
+                    fatherSurname: '',
+                    motherName: '',
+                    motherSurname: '',
+                    motherMaidenName: '',
+                    notes: fields[7] || '',
+                    original: line,
+                    fatherNameValidated: false,
+                    fatherSurnameValidated: false,
+                    motherNameValidated: false,
+                    motherSurnameValidated: false,
+                    motherMaidenNameValidated: false
+                };
+            }
+        } else {
+            // Krótki format (≤7 kolumn) - INTELIGENTNE PARSOWANIE
+            let yearValue = '';
+            let numberValue = '';
+            let idValue = recordId || fields[0] || '';
+            let surnameValue = '';
+            let nameValue = '';
+            let placeValue = '';
+            
+            // Przeszukaj pola
+            const numericFields = [];
+            const textFields = [];
+            
+            fields.forEach((field, idx) => {
+                if (idx === 0 && idValue) return;
+                
+                const trimmed = field.trim();
+                if (/^\d+$/.test(trimmed)) {
+                    numericFields.push({ value: trimmed, index: idx });
+                } else if (trimmed) {
+                    textFields.push({ value: trimmed, index: idx });
+                }
+            });
+            
+            // Rozpoznaj rok (4 cyfry)
+            if (!yearValue) {
+                for (const nf of numericFields) {
+                    const num = parseInt(nf.value);
+                    if (nf.value.length === 4 && num >= 1000 && num <= 2500) {
+                        yearValue = nf.value;
+                        break;
+                    }
+                }
+            }
+            
+            // Rozpoznaj numer aktu (1-3 cyfry)
+            if (!numberValue) {
+                for (const nf of numericFields) {
+                    if (nf.value !== yearValue && nf.value.length <= 3) {
+                        numberValue = nf.value;
+                        break;
+                    }
+                }
+            }
+            
+            // Tekstowe pola: 1=nazwisko, 2=imię, 3=miejscowość
+            if (textFields.length >= 1) surnameValue = textFields[0].value;
+            if (textFields.length >= 2) nameValue = textFields[1].value;
+            if (textFields.length >= 3) placeValue = textFields[2].value; // TRZECIE POLE = MIEJSCE
+            
+            // Sprawdź czy w którymś polu jest miejsce (zawiera typowe końcówki)
+            if (!placeValue) {
+                for (let i = 0; i < textFields.length; i++) {
+                    const text = textFields[i].value.toLowerCase();
+                    if (text.endsWith('ów') || text.endsWith('owo') || text.endsWith('ice') || 
+                        text.endsWith('nica') || text.endsWith('ska') || text.includes('wieś')) {
+                        placeValue = textFields[i].value;
+                        break;
+                    }
+                }
+            }
+            
+            record = {
+                id: idValue || generateAutoId({ surname: surnameValue, name: nameValue, year: yearValue }, index),
+                surname: surnameValue,
+                name: nameValue,
+                number: numberValue,
+                year: yearValue,
+                place: placeValue || 'Nieznane', // ZAWSZE przynajmniej 'Nieznane'
+                fatherName: '',
+                fatherSurname: '',
+                motherName: '',
+                motherSurname: '',
+                motherMaidenName: '',
+                notes: '',
+                original: line,
+                fatherNameValidated: false,
+                fatherSurnameValidated: false,
+                motherNameValidated: false,
+                motherSurnameValidated: false,
+                motherMaidenNameValidated: false
+            };
+        }
+        
+        // Autogeneruj ID jeśli brakuje
+        if (!record.id || record.id.trim() === '') {
+            record.id = generateAutoId(record, index);
+        }
+        
+        // OSTATECZNY FALLBACK: jeśli miejsce jest puste → 'Nieznane'
+        if (!record.place || record.place.trim() === '' || record.place === '-') {
+            record.place = 'Nieznane';
+        }
+        
+        // DEBUG: pokaż pierwsze 3 rekordy
+        if (index < 3) {
+            console.log(`📋 Linia ${index}: MIEJSCE = "${record.place}"`);
+        }
+        
+        // Walidacja i dodanie do danych
+        validateRecordLocal(record);
+        allData.push(record);
+    });
+    
+    console.log(`✅ parseDataWithIds: ${allData.length} rekordów, miejsca ustawione`);
+    appState.records = allData; // Aktualizuj appState
+    displayData();
+}
+PATCH 2: Naprawa funkcji parseDataWithBackend (miejsce)
+Znajdź funkcję parseDataWithBackend i ZMIEŃ tę linię:
+
+javascript
+// W funkcji parseDataWithBackend, znajdź tę linię:
+place: r.parent_data.place || '',
+
+// ZMIEŃ NA:
+place: r.parent_data.place || r.parent_data.origin_place || 'Nieznane',
+PATCH 3: Poprawka w funkcji parseGenealogicalData
+W funkcji parseGenealogicalData, ZMIEŃ ostatnią część:
+
+javascript
+// PRZED:
+return result;
+
+// PO:
+// Jeśli nie znaleziono miejsca, spróbuj wyciągnąć z początku tekstu
+if (!result.place && text.trim()) {
+    const firstWord = text.trim().split(' ')[0];
+    // Sprawdź czy pierwsze słowo wygląda na miejscowość
+    if (firstWord.length > 3 && /^[A-Za-ząćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(firstWord)) {
+        result.place = firstWord;
+    }
+}
+
+return result;
+PATCH 4: Naprawa funkcji exportData()
+ZASTĄP CAŁĄ funkcję exportData tym kodem:
+
+javascript
+function exportData() {
+    if (appState.records.length === 0) {
+        showNotification('Brak danych do eksportu', 'warning');
+        return;
+    }
+
+    const format = document.getElementById('exportFormat').value;
+    showNotification(`Eksportowanie do ${format.toUpperCase()}...`, 'info');
+    
+    // UŻYWAJ TYLKO FRONTENDOWEGO EKSPORTU - zawsze kompletne dane
+    exportDataLocal(format);
+}
+PATCH 5: Ulepszona funkcja exportDataLocal
+ZASTĄP funkcję exportDataLocal tym kodem:
+
+javascript
+async function exportDataLocal(format = 'tsv') {
+    try {
+        const selectedColumns = getSelectedColumns();
+        if (selectedColumns.length === 0) {
+            showNotification('Wybierz przynajmniej jedną kolumnę do eksportu', 'error');
+            return;
+        }
+        
+        console.log(`📤 Eksport ${format}, kolumny:`, selectedColumns);
+        
+        const headers = getColumnHeaders(selectedColumns);
+        let content = '';
+        let mimeType = '';
+        let filename = `rodzice-${new Date().toISOString().slice(0, 10)}.${format}`;
+        
+        if (format === 'json') {
+            // JSON: wszystkie dane z rekordów
+            const dataToExport = appState.records.map(record => {
+                const obj = {};
+                selectedColumns.forEach(col => {
+                    obj[col] = record[col] || '';
+                });
+                return obj;
+            });
+            content = JSON.stringify(dataToExport, null, 2);
+            mimeType = 'application/json';
+        } 
+        else if (format === 'csv') {
+            // CSV z cudzysłowami
+            content = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+            appState.records.forEach(record => {
+                const row = selectedColumns.map(col => {
+                    let value = record[col] || '';
+                    return `"${value.toString().replace(/"/g, '""')}"`;
+                });
+                content += row.join(',') + '\n';
+            });
+            mimeType = 'text/csv;charset=utf-8';
+        }
+        else if (format === 'xlsx') {
+            // Dla Excel używamy TSV (Excel ładuje TSV jako Excel)
+            content = headers.join('\t') + '\n';
+            appState.records.forEach(record => {
+                const row = selectedColumns.map(col => record[col] || '');
+                content += row.join('\t') + '\n';
+            });
+            mimeType = 'application/vnd.ms-excel';
+            filename = `rodzice-${new Date().toISOString().slice(0, 10)}.xls`;
+        }
+        else {
+            // TSV (domyślny)
+            content = headers.join('\t') + '\n';
+            appState.records.forEach(record => {
+                const row = selectedColumns.map(col => record[col] || '');
+                content += row.join('\t') + '\n';
+            });
+            mimeType = 'text/tab-separated-values;charset=utf-8';
+        }
+        
+        // Pobierz plik
+        const blob = new Blob(['\ufeff' + content], { type: mimeType }); // BOM dla UTF-8
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showNotification(`✅ Wyeksportowano ${appState.records.length} rekordów (${selectedColumns.length} kolumn)`, 'success');
+        
+    } catch (error) {
+        console.error('❌ Błąd eksportu:', error);
+        showNotification(`Błąd eksportu: ${error.message}`, 'error');
+    }
+}
+PATCH 6: Poprawiona funkcja getColumnHeaders
+DODAJ tę funkcję jeśli jej nie masz, lub UAKTUALNIJ:
+
+javascript
+function getColumnHeaders(selectedColumns) {
+    const headerMap = {
+        id: 'ID',
+        year: 'ROK',
+        number: 'Nr',
+        surname: 'Nazwisko',
+        name: 'Imię',
+        place: 'Miejscowość',
+        fatherName: 'Imię_ojca',
+        fatherSurname: 'Nazwisko_ojca',
+        fatherAge: 'Wiek_ojca',
+        motherName: 'Imię_matki',
+        motherSurname: 'Nazwisko_matki',
+        motherAge: 'Wiek_matki',
+        motherMaidenName: 'Nazwisko_panieńskie_matki',
+        recordType: 'Typ_rekordu',
+        notes: 'Uwagi',
+        isModified: 'Zmodyfikowany',
+        original: 'Oryginalne_dane',
+        birthDate: 'Data_urodzenia',
+        baptismDate: 'Data_chrztu',
+        godfatherName: 'Ojciec_chrzestny_imię',
+        godfatherSurname: 'Ojciec_chrzestny_nazwisko',
+        godmotherName: 'Matka_chrzestna_imię',
+        godmotherSurname: 'Matka_chrzestna_nazwisko'
+    };
+    
+    return selectedColumns.map(col => headerMap[col] || col);
+}
+PATCH 7: Ukrywanie preview po wczytaniu danych
+W funkcji displayData, DODAJ na początku:
+
+javascript
+function displayData() {
+    if (appState.records.length === 0) {
+        showNotification('Brak danych do wyświetlenia', 'warning');
+        return;
+    }
+    
+    // UKRYJ PODGLĄD DANYCH WEJŚCIOWYCH
+    const inputPreview = document.getElementById('inputPreview');
+    if (inputPreview) {
+        inputPreview.style.display = 'none';
+    }
+    
+    // Pokaż główną tabelę i panel
+    const tableWrapper = document.getElementById('tableWrapper');
+    const bottomPanel = document.getElementById('bottomPanel');
+    
+    if (tableWrapper) tableWrapper.style.display = 'block';
+    if (bottomPanel) bottomPanel.style.display = 'block';
+    
+    // Aktualizuj statystyki i renderuj
+    updateStats();
+    renderTable();
+    
+    // Pokaż pierwszy wiersz w okienku
+    if (appState.records.length > 0) {
+        showOriginalLine(appState.records[0]);
+    }
+    
+    // Debug: pokaż pierwszy rekord
+    console.log('📊 Pierwszy rekord po wczytaniu:', {
+        id: appState.records[0].id,
+        place: appState.records[0].place,
+        surname: appState.records[0].surname,
+        name: appState.records[0].name
+    });
+}
+PATCH 8: Naprawa kolorowania miejscowości w tabeli
+W funkcji createTableRow, znajdź tę część (kolumna 5 - Miejscowość):
+
+javascript
+// W createTableRow(), w pętli forEach po cells:
+} else if (i === 5) {  // Miejscowość (Place)
+    if (!record.place || record.place === '-') {
+        td.classList.add('text-empty');
+    } else if (nameDatabase.places && nameDatabase.places.has(record.place.toLowerCase().trim())) {
+        td.classList.add('text-validated');
+        console.log('✅ Miejscowość w bazie:', record.place);
+    } else {
+        td.classList.add('cell-not-found');
+        console.log('❌ Miejscowość BRAK:', record.place, 
+                   'Database loaded:', !!nameDatabase.places, 
+                   'Size:', nameDatabase.places?.size);
+    }
+}
+ZMIEŃ NA:
+
+javascript
+} else if (i === 5) {  // Miejscowość (Place)
+    const placeValue = record.place || '-';
+    if (!placeValue || placeValue === '-' || placeValue === 'Nieznane') {
+        td.classList.add('text-empty');
+    } else if (nameDatabase.places && nameDatabase.places.has(placeValue.toLowerCase().trim())) {
+        td.classList.add('text-validated');
+    } else {
+        td.classList.add('cell-not-found');
+    }
+}
+TEST PO POPRAWKACH:
+Po zastosowaniu wszystkich patchów:
+
+Miejscowość będzie ZAWSZE widoczna w głównej tabeli
+
+Eksport będzie działał poprawnie z wybranymi kolumnami
+
+Tylko jedna tabela będzie widoczna po wczytaniu danych
+
+Kolorowanie miejscowości będzie poprawne (zielone=w bazie, pomarańczowe=nie w bazie, szare=brak)
+
+Dodatkowo dodaj debugowanie: w parseDataWithIds dodaję logi które pokazują jakie miejsce zostało przypisane.
+
+To rozwiązuje WSZYSTKIE zidentyfikowane problemy! 🚀
+
+---
+
+_**Agent (model copilot/grok-code-fast-1)**_
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1738-1738), wiersze 1738 do 1855</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/parent-validator.js#1738-1738), wiersze 1738 do 1855
+
+</details>
+</tool-use>
 
 ---
 

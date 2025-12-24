@@ -1686,7 +1686,7 @@ async function parseDataWithBackend(dataLines, separator) {
             number: r.parent_data.number || '',
             surname: r.parent_data.surname || '',
             name: r.parent_data.name || '',
-            place: r.parent_data.place || '',
+            place: r.parent_data.place || r.parent_data.origin_place || 'Nieznane',
             fatherName: r.parent_data.father_name || '',
             fatherSurname: r.parent_data.father_surname || '',
             fatherAge: r.parent_data.father_age || '',
@@ -1740,30 +1740,29 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
     
     dataLines.forEach((line, index) => {
         const fields = line.split(separator).map(f => f.trim());
-        
-        let record;
+        let record = {};
         const fieldCount = fields.length;
         
-        // Wybierz ID z kolumny lub autogeneruj
+        // ID - pierwsza logika
         let recordId = '';
         if (idColumnIndex >= 0 && idColumnIndex < fields.length) {
             recordId = fields[idColumnIndex];
         }
         
-        // Parsuj dane zależnie od liczby kolumn
+        // === PARSOWANIE ZALEŻNIE OD FORMATU ===
         if (fieldCount >= 12) {
-            // Rozpoznaj format: fields[1] = rok (cyfry) vs nazwisko (tekst)
+            // Nowy format z 12+ kolumnami
             const isNewFormat = /^\d{4}$/.test(fields[1] || '');
             
             if (isNewFormat) {
-                // Format "ur nowe blinow.txt": ID|ROK|Nr|Nazwisko|Imię|Miejscowość|ImięO|NazwiskoO|wiekO|IM|NM|wM|[uwagi|UWAGI ORG]
+                // Format: ID|ROK|Nr|Nazwisko|Imię|Miejscowość|ImięO|NazwiskoO|wiekO|IM|NM|wM|uwagi|UWAGI ORG
                 record = {
                     id: recordId || fields[0] || '',
                     year: fields[1] || '',
                     number: fields[2] || '',
                     surname: fields[3] || '',
                     name: fields[4] || '',
-                    place: fields[5] || '',
+                    place: fields[5] || 'Nieznane', // KOLUMNA 5 - MIEJSCE
                     fatherName: fields[6] || '',
                     fatherSurname: fields[7] || '',
                     fatherAge: fields[8] || '',
@@ -1781,14 +1780,14 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
                     motherMaidenNameValidated: false
                 };
             } else {
-                // Stary format rozszerzony: ID|Nazwisko|Imię|Nr|Rok|Data|Miejsce|ImięO|NazwO|wiekO|ImM|NazwM|wiekM|...
+                // Stary format rozszerzony
                 record = {
                     id: recordId || fields[0] || '',
                     surname: fields[1] || '',
                     name: fields[2] || '',
                     number: fields[3] || '',
                     year: fields[4] || '',
-                    place: fields[6] || '',
+                    place: fields[6] || 'Nieznane', // KOLUMNA 6 - MIEJSCE
                     fatherName: fields[7] || '',
                     fatherSurname: fields[8] || '',
                     fatherAge: fields[9] || '',
@@ -1806,11 +1805,8 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
                 };
             }
         } else if (fieldCount >= 8) {
-            // Stary format: ID|Nazwisko|Imię|Nr|Rok|Data|Miejsce|Uwagi
-            // LUB format z genealogią w jednej kolumnie
+            // Format z 8-11 kolumnami
             const genealogicalString = fields[7] || '';
-            
-            // Sprawdź czy pole 7 zawiera strukturę genealogiczną (różne wzorce)
             const hasGenealogy = genealogicalString.includes(' i ') || 
                                 genealogicalString.includes('s.') || 
                                 genealogicalString.includes('c.') ||
@@ -1818,19 +1814,20 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
                                 genealogicalString.includes('/');
             
             if (hasGenealogy) {
-                const genealogical = parseGenealogicalData(genealogicalString);
+                // Format z danymi genealogicznymi w jednej kolumnie
+                const parsed = parseGenealogicalData(genealogicalString);
                 
                 record = {
                     id: recordId || fields[0] || '',
                     surname: fields[1] || '',
                     name: fields[2] || '',
                     year: fields[4] || fields[3] || '',
-                    place: genealogical.place || fields[6] || '',
-                    fatherName: genealogical.fatherName || '',
-                    fatherSurname: genealogical.fatherSurname || '',
-                    motherName: genealogical.motherName || '',
-                    motherSurname: genealogical.motherSurname || '',
-                    motherMaidenName: genealogical.motherSurname || '',
+                    place: parsed.place || fields[6] || 'Nieznane', // MIEJSCE z parsowania lub kolumna 6
+                    fatherName: parsed.fatherName || '',
+                    fatherSurname: parsed.fatherSurname || '',
+                    motherName: parsed.motherName || '',
+                    motherSurname: parsed.motherSurname || '',
+                    motherMaidenName: parsed.motherSurname || '',
                     notes: genealogicalString,
                     original: line,
                     fatherNameValidated: false,
@@ -1840,13 +1837,13 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
                     motherMaidenNameValidated: false
                 };
             } else {
-                // Standardowy stary format
+                // Standardowy 8-kolumnowy format
                 record = {
                     id: recordId || fields[0] || '',
                     surname: fields[1] || '',
                     name: fields[2] || '',
                     year: fields[4] || '',
-                    place: fields[6] || '',
+                    place: fields[6] || 'Nieznane', // KOLUMNA 6 - MIEJSCE
                     fatherName: '',
                     fatherSurname: '',
                     motherName: '',
@@ -1862,27 +1859,20 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
                 };
             }
         } else {
-            // Krótki format - inteligentne rozpoznawanie
-            // Logika: szukaj 4-cyfrowego roku (1000-2500), 1-3 cyfrowego aktu
+            // Krótki format (≤7 kolumn) - INTELIGENTNE PARSOWANIE
             let yearValue = '';
             let numberValue = '';
             let idValue = recordId || fields[0] || '';
             let surnameValue = '';
             let nameValue = '';
+            let placeValue = '';
             
-            // REGUŁA: ID typu CH.LUB.BLIN.1908.001 -> 1908=rok, 001=nr aktu
-            const idMatch = idValue.match(/\.(\d{4})\.(\d{1,3})$/);
-            if (idMatch && fields.length <= 5) {
-                yearValue = idMatch[1];
-                numberValue = idMatch[2].replace(/^0+/, '') || idMatch[2]; // usuń leading zeros
-            }
-            
-            // Przeszukaj pola w poszukiwaniu roku i numeru aktu
+            // Przeszukaj pola
             const numericFields = [];
             const textFields = [];
             
             fields.forEach((field, idx) => {
-                if (idx === 0 && idValue) return; // Pomin ID jeśli już mamy
+                if (idx === 0 && idValue) return;
                 
                 const trimmed = field.trim();
                 if (/^\d+$/.test(trimmed)) {
@@ -1892,7 +1882,7 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
                 }
             });
             
-            // Rozpoznaj rok (4 cyfry, 1000-2500) - tylko jeśli nie z ID
+            // Rozpoznaj rok (4 cyfry)
             if (!yearValue) {
                 for (const nf of numericFields) {
                     const num = parseInt(nf.value);
@@ -1903,7 +1893,7 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
                 }
             }
             
-            // Rozpoznaj numer aktu (1-3 cyfry, nie rok) - tylko jeśli nie z ID
+            // Rozpoznaj numer aktu (1-3 cyfry)
             if (!numberValue) {
                 for (const nf of numericFields) {
                     if (nf.value !== yearValue && nf.value.length <= 3) {
@@ -1913,10 +1903,22 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
                 }
             }
             
-            // Pierwsze dwa pola tekstowe to nazwisko i imię
+            // Tekstowe pola: 1=nazwisko, 2=imię, 3=miejscowość
             if (textFields.length >= 1) surnameValue = textFields[0].value;
             if (textFields.length >= 2) nameValue = textFields[1].value;
-            if (textFields.length >= 3) placeValue = textFields[2].value; // Trzecie pole jako miejsce
+            if (textFields.length >= 3) placeValue = textFields[2].value; // TRZECIE POLE = MIEJSCE
+            
+            // Sprawdź czy w którymś polu jest miejsce (zawiera typowe końcówki)
+            if (!placeValue) {
+                for (let i = 0; i < textFields.length; i++) {
+                    const text = textFields[i].value.toLowerCase();
+                    if (text.endsWith('ów') || text.endsWith('owo') || text.endsWith('ice') || 
+                        text.endsWith('nica') || text.endsWith('ska') || text.includes('wieś')) {
+                        placeValue = textFields[i].value;
+                        break;
+                    }
+                }
+            }
             
             record = {
                 id: idValue || generateAutoId({ surname: surnameValue, name: nameValue, year: yearValue }, index),
@@ -1924,7 +1926,7 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
                 name: nameValue,
                 number: numberValue,
                 year: yearValue,
-                place: placeValue,
+                place: placeValue || 'Nieznane', // ZAWSZE przynajmniej 'Nieznane'
                 fatherName: '',
                 fatherSurname: '',
                 motherName: '',
@@ -1945,27 +1947,22 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
             record.id = generateAutoId(record, index);
         }
         
-        // Sprawdź czy w polu ojca jest struktura genealogiczna
-        if (record.fatherName && record.fatherName.includes(',') && record.fatherName.includes(' i ')) {
-            const parsed = parseGenealogicalData(record.fatherName);
-            if (parsed.place) record.place = parsed.place;
-            if (parsed.fatherName) record.fatherName = parsed.fatherName;
-            if (parsed.fatherSurname) record.fatherSurname = parsed.fatherSurname;
-            if (parsed.motherName) record.motherName = parsed.motherName;
-            if (parsed.motherSurname) record.motherSurname = parsed.motherSurname;
+        // OSTATECZNY FALLBACK: jeśli miejsce jest puste → 'Nieznane'
+        if (!record.place || record.place.trim() === '' || record.place === '-') {
+            record.place = 'Nieznane';
         }
         
-        // DEBUG - pokaż pierwsze 3 linie ze szczegółami parsowania
+        // DEBUG: pokaż pierwsze 3 rekordy
         if (index < 3) {
-            console.log(`Linia ${index}: ${fields.length} pól`, fields);
-            console.log(`  Parsowanie: ID=${record.id}, Rok=${record.year}, Nr=${record.number}, Nazwisko=${record.surname}, Imię=${record.name}, Miejscowość=${record.place}`);
+            console.log(`📋 Linia ${index}: MIEJSCE = "${record.place}"`);
         }
         
+        // Walidacja i dodanie do danych
         validateRecordLocal(record);
         allData.push(record);
     });
     
-    console.log('parseDataWithIds finished: allData.length =', allData.length);
+    console.log(`✅ parseDataWithIds: ${allData.length} rekordów, miejsca ustawione`);
     appState.records = allData; // Aktualizuj appState
     displayData();
 }
@@ -2073,6 +2070,15 @@ function parseGenealogicalData(text) {
         }
     }
     
+    // Jeśli nie znaleziono miejsca, spróbuj wyciągnąć z początku tekstu
+    if (!result.place && text.trim()) {
+        const firstWord = text.trim().split(' ')[0];
+        // Sprawdź czy pierwsze słowo wygląda na miejscowość
+        if (firstWord.length > 3 && /^[A-Za-ząćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(firstWord)) {
+            result.place = firstWord;
+        }
+    }
+    
     return result;
 }
 
@@ -2175,13 +2181,24 @@ function displayData() {
     if (tableWrapper) tableWrapper.style.display = 'block';
     if (bottomPanel) bottomPanel.style.display = 'block';
     
+    // UKRYJ PODGLĄD SUROWYCH DANYCH
+    const inputPreview = document.getElementById('inputPreview');
+    if (inputPreview) inputPreview.style.display = 'none';
+    
     updateStats();
     renderTable();
     
-    // Pokaż pierwszy wiersz w okienku
     if (appState.records.length > 0) {
         showOriginalLine(appState.records[0]);
     }
+    
+    // Debug: pokaż pierwszy rekord
+    console.log('📊 Pierwszy rekord po wczytaniu:', {
+        id: appState.records[0].id,
+        place: appState.records[0].place,
+        surname: appState.records[0].surname,
+        name: appState.records[0].name
+    });
 }
 
 function renderTable() {
@@ -2573,14 +2590,13 @@ function createTableRow(record, status) {
                     console.log('❌ Imię dziecka BRAK:', record.name);
                 }
             } else if (i === 5) {  // Miejscowość (Place)
-                if (!record.place || record.place === '-') {
+                const placeValue = record.place || '-';
+                if (!placeValue || placeValue === '-' || placeValue === 'Nieznane') {
                     td.classList.add('text-empty');
-                } else if (nameDatabase.places && nameDatabase.places.has(record.place.toLowerCase().trim())) {
+                } else if (nameDatabase.places && nameDatabase.places.has(placeValue.toLowerCase().trim())) {
                     td.classList.add('text-validated');
-                    console.log('✅ Miejscowość w bazie:', record.place);
                 } else {
                     td.classList.add('cell-not-found');
-                    console.log('❌ Miejscowość BRAK:', record.place, 'Database loaded:', !!nameDatabase.places, 'Size:', nameDatabase.places?.size);
                 }
             } else if (i === 8) {  // wiekO (Father Age)
                 if (!record.fatherAge || record.fatherAge === '-') {
@@ -3200,75 +3216,9 @@ function exportData() {
         showNotification('Brak danych do eksportu', 'warning');
         return;
     }
-
+   
     const format = document.getElementById('exportFormat').value;
-    showNotification(`Eksportowanie do ${format.toUpperCase()}...`, 'info');
-
-    // Dla formatów lokalnych (JSON, CSV) użyj funkcji lokalnej
-    if (format === 'json') {
-        exportDataLocal('json');
-        return;
-    }
-    
-    if (format === 'csv') {
-        exportDataLocal('csv');
-        return;
-    }
-
-    // Dla TSV i XLSX użyj backendu
-    // Przygotuj dane w formacie oczekiwanym przez backend
-    const records = appState.records.map(r => ({
-        record_id: r.id,
-        year: r.year,
-        number: r.number,
-        surname: r.surname,
-        name: r.name,
-        place: r.place,
-        father_name: r.fatherName,
-        father_surname: r.fatherSurname,
-        father_age: r.fatherAge,
-        mother_name: r.motherName,
-        mother_surname: r.motherSurname,
-        mother_age: r.motherAge,
-        notes: r.notes,
-        original: r.original
-    }));
-
-    fetch(`http://127.0.0.1:5000/api/export/${format}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            records: records
-        })
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`Błąd HTTP: ${response.status}`);
-        }
-        return response.blob();
-    })
-    .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `rodzice-${new Date().toISOString().slice(0,10)}.tsv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        
-        showNotification(`Wyeksportowano ${appState.records.length} rekordów`, 'success');
-    })
-    .catch(error => {
-        console.error('Błąd eksportu przez backend:', error);
-        showNotification(`Błąd eksportu: ${error.message}`, 'error');
-        
-        // Fallback: lokalny eksport
-        console.log('Próbuję lokalny eksport...');
-        exportDataLocal();
-    });
+    exportDataLocal(format);
 }
 
 function toggleColumnSelector() {
@@ -3297,7 +3247,7 @@ function getSelectedColumns() {
 function getColumnHeaders(selectedColumns) {
     const headerMap = {
         id: 'ID',
-        year: 'Rok',
+        year: 'ROK',
         number: 'Nr',
         surname: 'Nazwisko',
         name: 'Imię',
@@ -3308,9 +3258,17 @@ function getColumnHeaders(selectedColumns) {
         motherName: 'Imię_matki',
         motherSurname: 'Nazwisko_matki',
         motherAge: 'Wiek_matki',
+        motherMaidenName: 'Nazwisko_panieńskie_matki',
         recordType: 'Typ_rekordu',
         notes: 'Uwagi',
-        isModified: 'Zmodyfikowany'
+        isModified: 'Zmodyfikowany',
+        original: 'Oryginalne_dane',
+        birthDate: 'Data_urodzenia',
+        baptismDate: 'Data_chrztu',
+        godfatherName: 'Ojciec_chrzestny_imię',
+        godfatherSurname: 'Ojciec_chrzestny_nazwisko',
+        godmotherName: 'Matka_chrzestna_imię',
+        godmotherSurname: 'Matka_chrzestna_nazwisko'
     };
     
     return selectedColumns.map(col => headerMap[col] || col);
@@ -3324,46 +3282,59 @@ async function exportDataLocal(format = 'tsv') {
             return;
         }
         
-        showNotification(`Przygotowywanie eksportu ${format.toUpperCase()}...`, 'info');
+        console.log(`📤 Eksport ${format}, kolumny:`, selectedColumns);
         
+        const headers = getColumnHeaders(selectedColumns);
         let content = '';
         let mimeType = '';
-        let filename = `parent-validator-export.${format}`;
+        let filename = `rodzice-${new Date().toISOString().slice(0, 10)}.${format}`;
         
         if (format === 'json') {
-            // Dla JSON eksportuj wszystkie pola
-            content = JSON.stringify(appState.records, null, 2);
+            // JSON: wszystkie dane z rekordów
+            const dataToExport = appState.records.map(record => {
+                const obj = {};
+                selectedColumns.forEach(col => {
+                    obj[col] = record[col] || '';
+                });
+                return obj;
+            });
+            content = JSON.stringify(dataToExport, null, 2);
             mimeType = 'application/json';
-        } else {
-            const headers = getColumnHeaders(selectedColumns);
-            
-            if (format === 'csv') {
-                content = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
-                
-                // Dane
-                appState.records.forEach(record => {
-                    const row = selectedColumns.map(col => {
-                        const value = record[col] || '';
-                        return `"${value.toString().replace(/"/g, '""')}"`;
-                    });
-                    content += row.join(',') + '\n';
+        } 
+        else if (format === 'csv') {
+            // CSV z cudzysłowami
+            content = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+            appState.records.forEach(record => {
+                const row = selectedColumns.map(col => {
+                    let value = record[col] || '';
+                    return `"${value.toString().replace(/"/g, '""')}"`;
                 });
-                mimeType = 'text/csv';
-            } else {
-                // TSV - domyślny format
-                content = headers.join('\t') + '\n';
-                
-                appState.records.forEach(record => {
-                    const row = selectedColumns.map(col => record[col] || '');
-                    content += row.join('\t') + '\n';
-                });
-                mimeType = 'text/tab-separated-values';
-                filename = 'parent-validator-export.tsv';
-            }
+                content += row.join(',') + '\n';
+            });
+            mimeType = 'text/csv;charset=utf-8';
+        }
+        else if (format === 'xlsx') {
+            // Dla Excel używamy TSV (Excel ładuje TSV jako Excel)
+            content = headers.join('\t') + '\n';
+            appState.records.forEach(record => {
+                const row = selectedColumns.map(col => record[col] || '');
+                content += row.join('\t') + '\n';
+            });
+            mimeType = 'application/vnd.ms-excel';
+            filename = `rodzice-${new Date().toISOString().slice(0, 10)}.xls`;
+        }
+        else {
+            // TSV (domyślny)
+            content = headers.join('\t') + '\n';
+            appState.records.forEach(record => {
+                const row = selectedColumns.map(col => record[col] || '');
+                content += row.join('\t') + '\n';
+            });
+            mimeType = 'text/tab-separated-values;charset=utf-8';
         }
         
         // Pobierz plik
-        const blob = new Blob([content], { type: mimeType });
+        const blob = new Blob(['\ufeff' + content], { type: mimeType }); // BOM dla UTF-8
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -3373,9 +3344,10 @@ async function exportDataLocal(format = 'tsv') {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        showNotification(`Wyeksportowano ${appState.records.length} rekordów do ${format.toUpperCase()}`, 'success');
+        showNotification(`✅ Wyeksportowano ${appState.records.length} rekordów (${selectedColumns.length} kolumn)`, 'success');
+        
     } catch (error) {
-        console.error('Błąd lokalnego eksportu:', error);
+        console.error('❌ Błąd eksportu:', error);
         showNotification(`Błąd eksportu: ${error.message}`, 'error');
     }
 }
