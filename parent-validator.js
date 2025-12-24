@@ -754,11 +754,21 @@ function loadNameDatabase() {
         console.log('Ładowanie baz danych z localStorage cache');
         try {
             const cachedData = JSON.parse(cached);
-            Object.assign(nameDatabase, cachedData);
+            // Konwertuj zwykłe obiekty z powrotem na Set
+            Object.keys(cachedData).forEach(key => {
+                if (Array.isArray(cachedData[key])) {
+                    nameDatabase[key] = new Set(cachedData[key]);
+                } else {
+                    nameDatabase[key] = cachedData[key];
+                }
+            });
             console.log('Cache załadowany pomyślnie');
             return; // Nie ładuj ponownie
         } catch (err) {
             console.warn('Błąd parsowania cache:', err);
+            // Wyczyść nieprawidłowy cache
+            localStorage.removeItem(cacheKey);
+            localStorage.removeItem(cacheExpiryKey);
             // Kontynuuj ładowanie z serwera
         }
     }
@@ -778,7 +788,16 @@ function loadNameDatabase() {
         if (loadedCount === totalFiles) {
             // Wszystkie pliki załadowane - zapisz do cache
             try {
-                localStorage.setItem(cacheKey, JSON.stringify(nameDatabase));
+                // Konwertuj Set na tablice przed zapisem do localStorage
+                const cacheData = {};
+                Object.keys(nameDatabase).forEach(key => {
+                    if (nameDatabase[key] instanceof Set) {
+                        cacheData[key] = Array.from(nameDatabase[key]);
+                    } else {
+                        cacheData[key] = nameDatabase[key];
+                    }
+                });
+                localStorage.setItem(cacheKey, JSON.stringify(cacheData));
                 localStorage.setItem(cacheExpiryKey, (now + cacheDuration).toString());
                 console.log('Bazy danych zapisane w localStorage cache');
             } catch (err) {
@@ -1693,12 +1712,6 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
     dataLines.forEach((line, index) => {
         const fields = line.split(separator).map(f => f.trim());
         
-        // DEBUG - pokaż pierwsze 3 linie ze szczegółami parsowania
-        if (index < 3) {
-            console.log(`Linia ${index}: ${fields.length} pól`, fields);
-            console.log(`  Parsowanie: ID=${recordId}, Rok=${record.year}, Nr=${record.number}, Nazwisko=${record.surname}, Imię=${record.name}, Miejscowość=${record.place}`);
-        }
-        
         let record;
         const fieldCount = fields.length;
         
@@ -1911,6 +1924,12 @@ function parseDataWithIds(dataLines, separator = '\t', idColumnIndex = -1) {
             if (parsed.fatherSurname) record.fatherSurname = parsed.fatherSurname;
             if (parsed.motherName) record.motherName = parsed.motherName;
             if (parsed.motherSurname) record.motherSurname = parsed.motherSurname;
+        }
+        
+        // DEBUG - pokaż pierwsze 3 linie ze szczegółami parsowania
+        if (index < 3) {
+            console.log(`Linia ${index}: ${fields.length} pól`, fields);
+            console.log(`  Parsowanie: ID=${record.id}, Rok=${record.year}, Nr=${record.number}, Nazwisko=${record.surname}, Imię=${record.name}, Miejscowość=${record.place}`);
         }
         
         validateRecordLocal(record);
