@@ -460,6 +460,347 @@ renderTable();
 
 ---
 
+## 📅 **FAZA 2.4: INTEGRACJA MODALA EDYCJI** (Tydzień 2-3)
+**Cel:** Przerobienie istniejącego modala na pracę z appState zamiast allData
+
+### **Dzień 12-14: Migracja modala edycji**
+
+#### **Krok 2.4.1: Aktualizacja openEditModal() dla appState**
+```javascript
+function openEditModal(recordId) {
+    // Pobierz rekord z appState zamiast allData
+    const record = appState.records.find(r => r.id === recordId);
+    if (!record) {
+        showNotification('Nie znaleziono rekordu', 'warning');
+        return;
+    }
+    
+    // Zapisz aktualnie edytowany rekord w appState
+    appState.currentRecord = record;
+    
+    // Wyświetl oryginalny tekst (sticky section)
+    const originalTextDisplay = document.getElementById('originalTextDisplay');
+    if (originalTextDisplay) {
+        originalTextDisplay.textContent = record.original || '';
+    }
+    
+    // Ustaw typ rekordu
+    const recordTypeSelect = document.getElementById('recordType');
+    recordTypeSelect.value = record.recordType || 'baptism';
+    
+    // Wypełnij wspólne pola metadata
+    document.getElementById('editID').value = record.id || '';
+    document.getElementById('editYear').value = record.year || '';
+    document.getElementById('editNumber').value = record.number || '';
+    document.getElementById('editPlace').value = record.place || '';
+    
+    // Wypełnij pola w zależności od typu rekordu
+    const recordType = record.recordType || 'baptism';
+    
+    if (recordType === 'baptism') {
+        // Pola dziecka
+        document.getElementById('editSurname').value = record.surname || '';
+        document.getElementById('editName').value = record.name || '';
+        document.getElementById('editBirthDate').value = record.birthDate || '';
+        document.getElementById('editBaptismDate').value = record.baptismDate || '';
+        
+        // Chrzestni
+        document.getElementById('godfatherName').value = record.godfatherName || '';
+        document.getElementById('godfatherSurname').value = record.godfatherSurname || '';
+        document.getElementById('godmotherName').value = record.godmotherName || '';
+        document.getElementById('godmotherSurname').value = record.godmotherSurname || '';
+        
+        // Rodzice
+        document.getElementById('editFatherName').value = record.fatherName || '';
+        document.getElementById('editFatherSurname').value = record.fatherSurname || '';
+        document.getElementById('editFatherAge').value = record.fatherAge || '';
+        document.getElementById('editMotherName').value = record.motherName || '';
+        document.getElementById('editMotherSurname').value = record.motherSurname || '';
+        document.getElementById('editMotherAge').value = record.motherAge || '';
+        
+    } else if (recordType === 'death') {
+        // Zmarły
+        document.getElementById('deceasedName').value = record.deceasedName || record.name || '';
+        document.getElementById('deceasedSurname').value = record.deceasedSurname || record.surname || '';
+        document.getElementById('deceasedAge').value = record.deceasedAge || '';
+        document.getElementById('deathDate').value = record.deathDate || '';
+        document.getElementById('deathCause').value = record.deathCause || '';
+        document.getElementById('burialDate').value = record.burialDate || '';
+        
+    } else if (recordType === 'marriage') {
+        // Pan młody
+        document.getElementById('groomName').value = record.groomName || '';
+        document.getElementById('groomSurname').value = record.groomSurname || '';
+        document.getElementById('groomAge').value = record.groomAge || '';
+        
+        // Panna młoda
+        document.getElementById('brideName').value = record.brideName || '';
+        document.getElementById('brideMaidenSurname').value = record.brideMaidenSurname || '';
+        document.getElementById('brideAge').value = record.brideAge || '';
+        
+        // Data ślubu
+        document.getElementById('marriageDate').value = record.marriageDate || '';
+        
+        // Świadkowie
+        document.getElementById('witness1Name').value = record.witness1Name || '';
+        document.getElementById('witness1Surname').value = record.witness1Surname || '';
+        document.getElementById('witness2Name').value = record.witness2Name || '';
+        document.getElementById('witness2Surname').value = record.witness2Surname || '';
+    }
+    
+    // Wspólne pola
+    document.getElementById('editNotes').value = record.notes || '';
+    document.getElementById('editOriginalNotes').value = record.original || '';
+    
+    // Przełącz widoczność sekcji
+    toggleModalSections(recordType);
+    
+    // Podświetl pola z błędami walidacji
+    highlightInvalidFields(record);
+    
+    // Pokaż modal
+    document.getElementById('modalRecordId').textContent = recordId;
+    const editModal = document.getElementById('editModal');
+    if (editModal) {
+        requestAnimationFrame(() => {
+            editModal.style.display = 'flex';
+            // Autofocus na pierwszym polu
+            const firstField = getFirstVisibleField(recordType);
+            if (firstField) firstField.focus();
+        });
+    }
+}
+
+function toggleModalSections(recordType) {
+    document.getElementById('baptismSection').classList.toggle('hidden', recordType !== 'baptism');
+    document.getElementById('deathSection').classList.toggle('hidden', recordType !== 'death');
+    document.getElementById('marriageSection').classList.toggle('hidden', recordType !== 'marriage');
+}
+
+function getFirstVisibleField(recordType) {
+    const fieldMap = {
+        'baptism': 'editSurname',
+        'death': 'deceasedName',
+        'marriage': 'groomName'
+    };
+    return document.getElementById(fieldMap[recordType]);
+}
+
+function highlightInvalidFields(record) {
+    if (!record.validation) return;
+    
+    // Reset wszystkich podświetleń
+    document.querySelectorAll('.field-invalid').forEach(el => {
+        el.classList.remove('field-invalid');
+    });
+    
+    // Podświetl pola z błędami
+    Object.entries(record.validation).forEach(([field, validation]) => {
+        if (validation.color === 'red') {
+            const element = document.getElementById(getFieldId(field));
+            if (element) {
+                element.classList.add('field-invalid');
+            }
+        }
+    });
+}
+
+function getFieldId(fieldName) {
+    const fieldMap = {
+        'surname': 'editSurname',
+        'name': 'editName',
+        'fatherName': 'editFatherName',
+        'fatherSurname': 'editFatherSurname',
+        'motherName': 'editMotherName',
+        'motherSurname': 'editMotherSurname',
+        'place': 'editPlace'
+    };
+    return fieldMap[fieldName] || fieldName;
+}
+```
+
+#### **Krok 2.4.2: Aktualizacja handleFormSubmit() dla appState**
+```javascript
+function handleFormSubmit(e) {
+    e.preventDefault();
+    if (!appState.currentRecord) return;
+    
+    const record = appState.currentRecord;
+    const recordId = record.id;
+    const changes = {};
+    
+    // Pobierz typ rekordu
+    const newRecordType = document.getElementById('recordType').value;
+    if (newRecordType !== record.recordType) {
+        changes.recordType = newRecordType;
+    }
+    
+    // Zbierz wszystkie pola z formularza
+    const formData = new FormData(e.target);
+    const formValues = Object.fromEntries(formData.entries());
+    
+    // Mapuj pola formularza na pola rekordu
+    const fieldMapping = {
+        'editYear': 'year',
+        'editNumber': 'number',
+        'editPlace': 'place',
+        'editSurname': 'surname',
+        'editName': 'name',
+        'editBirthDate': 'birthDate',
+        'editBaptismDate': 'baptismDate',
+        'godfatherName': 'godfatherName',
+        'godfatherSurname': 'godfatherSurname',
+        'godmotherName': 'godmotherName',
+        'godmotherSurname': 'godmotherSurname',
+        'editFatherName': 'fatherName',
+        'editFatherSurname': 'fatherSurname',
+        'editFatherAge': 'fatherAge',
+        'editMotherName': 'motherName',
+        'editMotherSurname': 'motherSurname',
+        'editMotherAge': 'motherAge',
+        'deceasedName': 'deceasedName',
+        'deceasedSurname': 'deceasedSurname',
+        'deceasedAge': 'deceasedAge',
+        'deathDate': 'deathDate',
+        'deathCause': 'deathCause',
+        'burialDate': 'burialDate',
+        'groomName': 'groomName',
+        'groomSurname': 'groomSurname',
+        'groomAge': 'groomAge',
+        'brideName': 'brideName',
+        'brideMaidenSurname': 'brideMaidenSurname',
+        'brideAge': 'brideAge',
+        'marriageDate': 'marriageDate',
+        'witness1Name': 'witness1Name',
+        'witness1Surname': 'witness1Surname',
+        'witness2Name': 'witness2Name',
+        'witness2Surname': 'witness2Surname',
+        'editNotes': 'notes'
+    };
+    
+    // Znajdź zmienione pola
+    Object.entries(fieldMapping).forEach(([formField, recordField]) => {
+        const newValue = formValues[formField] || '';
+        const currentValue = record[recordField] || '';
+        
+        if (newValue.trim() !== currentValue.trim()) {
+            changes[recordField] = newValue.trim();
+        }
+    });
+    
+    // Jeśli są zmiany, zaktualizuj rekord przez updateRecord
+    if (Object.keys(changes).length > 0) {
+        Object.entries(changes).forEach(([field, value]) => {
+            updateRecord(recordId, field, value);
+        });
+        
+        showNotification(`Zapisano ${Object.keys(changes).length} zmian`, 'success');
+    } else {
+        showNotification('Brak zmian do zapisania', 'info');
+    }
+    
+    // Zamknij modal
+    closeEditModal();
+}
+
+function closeEditModal() {
+    const modal = document.getElementById('editModal');
+    if (modal) modal.style.display = 'none';
+    appState.currentRecord = null;
+}
+```
+
+#### **Krok 2.4.3: Dodanie przycisków nawigacji między rekordami**
+```javascript
+// Dodaj do HTML modala (w form-actions):
+<div class="form-actions">
+    <button type="button" class="btn btn-nav" onclick="saveAndGoToPrevious()" title="Zapisz i przejdź do poprzedniego">
+        <span class="material-icons">arrow_back</span> Poprzedni
+    </button>
+    
+    <button type="submit" class="btn btn-primary">
+        <span class="material-icons">save</span> Zapisz
+    </button>
+    
+    <button type="button" class="btn btn-nav" onclick="saveAndGoToNext()" title="Zapisz i przejdź do następnego">
+        Następny <span class="material-icons">arrow_forward</span>
+    </button>
+    
+    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">
+        <span class="material-icons">close</span> Anuluj
+    </button>
+</div>
+
+// Funkcje nawigacji
+function saveAndGoToNext() {
+    // Najpierw zapisz aktualne zmiany
+    const form = document.getElementById('editForm');
+    const submitEvent = new Event('submit', { cancelable: true });
+    form.dispatchEvent(submitEvent);
+    
+    // Jeśli zapis się udał, otwórz następny rekord
+    if (!submitEvent.defaultPrevented) {
+        const currentIndex = appState.records.findIndex(r => r.id === appState.currentRecord.id);
+        if (currentIndex < appState.records.length - 1) {
+            const nextRecord = appState.records[currentIndex + 1];
+            setTimeout(() => openEditModal(nextRecord.id), 100);
+        }
+    }
+}
+
+function saveAndGoToPrevious() {
+    const form = document.getElementById('editForm');
+    const submitEvent = new Event('submit', { cancelable: true });
+    form.dispatchEvent(submitEvent);
+    
+    if (!submitEvent.defaultPrevented) {
+        const currentIndex = appState.records.findIndex(r => r.id === appState.currentRecord.id);
+        if (currentIndex > 0) {
+            const prevRecord = appState.records[currentIndex - 1];
+            setTimeout(() => openEditModal(prevRecord.id), 100);
+        }
+    }
+}
+```
+
+#### **Krok 2.4.4: Dodanie CSS dla nowych elementów**
+```css
+/* Dodaj do edit-modal.css */
+
+/* Podświetlanie pól z błędami */
+.field-invalid {
+    border-color: var(--warning) !important;
+    background-color: rgba(244, 67, 54, 0.1) !important;
+}
+
+/* Przyciski nawigacji */
+.btn-nav {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.btn-nav:hover {
+    background: rgba(255,255,255,0.1);
+    color: var(--text-primary);
+}
+
+/* Responsywność dla małych ekranów */
+@media (max-width: 768px) {
+    .form-actions {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .btn-nav {
+        flex: 1;
+        min-width: 120px;
+    }
+}
+```
+
+---
+
 ## 📅 **FAZA 3: MIGRACJA EKSPORTU** (Tydzień 3)
 **Cel:** Przejście z backend export na frontend TSV building
 

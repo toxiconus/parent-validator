@@ -53,6 +53,14 @@
 - [ ] Test color coding accuracy
 - [ ] Verify filter functionality
 
+### **2.4 Modal Integration**
+- [ ] Update `openEditModal()` to use `appState.records`
+- [ ] Modify `handleFormSubmit()` to use `updateRecord()`
+- [ ] Add navigation buttons (previous/next record)
+- [ ] Implement field validation highlighting
+- [ ] Test modal with all record types (baptism/death/marriage)
+- [ ] Verify data persistence after modal edits
+
 ---
 
 ## 📋 **PHASE 3: EXPORT MIGRATION** ⏳ Pending

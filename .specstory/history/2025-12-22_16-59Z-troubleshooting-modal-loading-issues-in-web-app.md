@@ -5937,7 +5937,7 @@ Wszystkie Twoje sugestie optymalizacyjne zostały włączone do dokumentacji mig
 
 ---
 
-_**User (2025-12-24 11:52Z)**_
+_**User (2025-12-24 11:53Z)**_
 
 Oto kilka praktycznych, ale nieoczywistych pomysłów, które mogą znacząco podnieść jakość aplikacji po wdrożeniu nowej architektury. Nie są one obowiązkowe, ale warto je rozważyć w kolejnych fazach (2.1+).
 1. Persistencja sesji w przeglądarce
@@ -6070,6 +6070,448 @@ Status: **completed**
 
 
 Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/implementation-plan.md#900-900), wiersze 900 do 913
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="copilot_replaceString">
+<details>
+<summary>Tool use: **copilot_replaceString**</summary>
+
+Additional data:
+
+```json
+{
+  "vscodeToolId": "copilot_replaceString",
+  "isHidden": true
+}
+```
+Result:
+
+```json
+{
+  "invocationMessage": "Korzystanie z \"Zamień ciąg w pliku\"",
+  "isConfirmed": {
+    "type": 1
+  },
+  "content": "&#96;&#96;&#96;markdown\n🚀 **FAZA 2.1+: UX ENHANCEMENTS - SZCZEGÓŁOWA IMPLEMENTACJA**\r\n\r\n### **Faza 2.1 - Core UX Enhancements (Po migracji podstawowej)**\r\n\r\n#### **2.1.1: Persistencia sesji w przeglądarce**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do appState\r\nconst appState = {\r\n    // ... istniejące pola\r\n    session: {\r\n        lastSaved: null,\r\n        autoSaveInterval: 30000, // 30 sekund\r\n        originalRecords: [] // Kopia oryginalnych danych\r\n    }\r\n};\r\n\r\n// Funkcja auto-zapisu\r\nfunction startAutoSave() {\r\n    setInterval(() =&gt; {\r\n        if (appState.records.length &gt; 0) {\r\n            saveSessionToStorage();\r\n        }\r\n    }, appState.session.autoSaveInterval);\r\n}\r\n\r\n// Zapisywanie sesji\r\nfunction saveSessionToStorage() {\r\n    const sessionData = {\r\n        records: appState.records,\r\n        filters: appState.filters,\r\n        timestamp: Date.now(),\r\n        version: appState.version\r\n    };\r\n    localStorage.setItem('parentValidator_session', JSON.stringify(sessionData));\r\n    appState.session.lastSaved = new Date();\r\n    console.log('✅ Sesja zapisana:', new Date().toLocaleTimeString());\r\n}\r\n\r\n// Odzyskiwanie przy starcie\r\nfunction loadSessionFromStorage() {\r\n    const saved = localStorage.getItem('parentValidator_session');\r\n    if (saved) {\r\n        try {\r\n            const sessionData = JSON.parse(saved);\r\n            const savedDate = new Date(sessionData.timestamp);\r\n            \r\n            // Pytaj użytkownika o odzyskanie\r\n            if (confirm(&#96;Odzyskać ostatnią sesję z ${savedDate.toLocaleString()}?&#96;)) {\r\n                appState.records = sessionData.records;\r\n                appState.filters = sessionData.filters;\r\n                appState.session.originalRecords = [...sessionData.records]; // Kopia oryginalnych\r\n                renderTable();\r\n                updateStats();\r\n                return true;\r\n            }\r\n        } catch (e) {\r\n            console.warn('Błąd ładowania sesji:', e);\r\n        }\r\n    }\r\n    return false;\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.1.2: Tryb porównania zmian**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do appState\r\nappState.viewMode = 'normal'; // 'normal' | 'changes-only'\r\n\r\n// Funkcja pokazywania zmian\r\nfunction toggleChangesView() {\r\n    appState.viewMode = appState.viewMode === 'normal' ? 'changes-only' : 'normal';\r\n    renderTable();\r\n}\r\n\r\n// W renderTable() - filtrowanie widocznych wierszy\r\nfunction renderTable() {\r\n    const visibleRecords = appState.viewMode === 'changes-only' \r\n        ? appState.records.filter(r =&gt; r.isModified)\r\n        : appState.records;\r\n    \r\n    // Renderuj tylko visibleRecords\r\n    // ...\r\n}\r\n\r\n// W createTableRow() - podświetlanie zmian\r\nfunction createTableRow(record) {\r\n    const tr = document.createElement('tr');\r\n    \r\n    if (record.isModified) {\r\n        tr.classList.add('row-modified');\r\n    }\r\n    \r\n    // Dla każdej komórki sprawdź czy się zmieniła\r\n    fields.forEach(field =&gt; {\r\n        const td = document.createElement('td');\r\n        const value = record[field];\r\n        const originalValue = getOriginalValue(record.id, field);\r\n        \r\n        if (value !== originalValue) {\r\n            td.classList.add('cell-changed');\r\n            td.title = &#96;Zmienione: ${originalValue} → ${value}&#96;;\r\n        }\r\n        \r\n        td.textContent = value || '';\r\n        tr.appendChild(td);\r\n    });\r\n    \r\n    return tr;\r\n}\r\n\r\nfunction getOriginalValue(recordId, field) {\r\n    const original = appState.session.originalRecords.find(r =&gt; r.id === recordId);\r\n    return original ? original[field] : '';\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.1.3: Global undo system**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do appState\r\nappState.undoStack = [];\r\nappState.undoIndex = -1;\r\n\r\n// Funkcja zapisywania akcji\r\nfunction saveAction(action) {\r\n    const actionEntry = {\r\n        type: action.type, // 'update', 'bulk-update', etc.\r\n        recordId: action.recordId,\r\n        field: action.field,\r\n        oldValue: action.oldValue,\r\n        newValue: action.newValue,\r\n        timestamp: Date.now()\r\n    };\r\n    \r\n    // Usuń przyszłe akcje jeśli jesteśmy w środku undo\r\n    appState.undoStack = appState.undoStack.slice(0, appState.undoIndex + 1);\r\n    \r\n    appState.undoStack.push(actionEntry);\r\n    appState.undoIndex = appState.undoStack.length - 1;\r\n    \r\n    // Limit do 50 akcji\r\n    if (appState.undoStack.length &gt; 50) {\r\n        appState.undoStack.shift();\r\n        appState.undoIndex--;\r\n    }\r\n}\r\n\r\n// Funkcja cofania\r\nfunction undoLastAction() {\r\n    if (appState.undoIndex &gt;= 0) {\r\n        const action = appState.undoStack[appState.undoIndex];\r\n        \r\n        // Cofnij akcję\r\n        const record = appState.records.find(r =&gt; r.id === action.recordId);\r\n        if (record) {\r\n            record[action.field] = action.oldValue;\r\n            record.isModified = true;\r\n            validateRecordLocal(record);\r\n        }\r\n        \r\n        appState.undoIndex--;\r\n        renderTable();\r\n        updateStats();\r\n        \r\n        console.log('Cofnięto:', action);\r\n    }\r\n}\r\n\r\n// Dodaj przycisk do UI\r\nfunction addUndoButton() {\r\n    const toolbar = document.getElementById('toolbar');\r\n    const undoBtn = document.createElement('button');\r\n    undoBtn.id = 'undo-btn';\r\n    undoBtn.textContent = 'Cofnij';\r\n    undoBtn.onclick = undoLastAction;\r\n    undoBtn.disabled = appState.undoIndex &lt; 0;\r\n    toolbar.appendChild(undoBtn);\r\n}\r\n&#96;&#96;&#96;\r\n\r\n### **Faza 2.2 - Data Management &amp; Analytics**\r\n\r\n#### **2.2.1: Statystyki kontekstowe**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do appState\r\nappState.stats = {\r\n    total: 0,\r\n    validated: 0,\r\n    warnings: 0,\r\n    empty: 0,\r\n    // Nowe statystyki\r\n    redFields: 0,\r\n    emptyPlaces: 0,\r\n    ageDistribution: {},\r\n    commonSurnames: {},\r\n    recordsByYear: {},\r\n    recordsByPlace: {}\r\n};\r\n\r\n// Funkcja obliczania statystyk\r\nfunction calculateDetailedStats() {\r\n    appState.stats = {\r\n        total: appState.records.length,\r\n        validated: appState.records.filter(r =&gt; r.validation &amp;&amp; Object.values(r.validation).every(v =&gt; v.status === 'valid')).length,\r\n        warnings: appState.records.filter(r =&gt; r.validation &amp;&amp; Object.values(r.validation).some(v =&gt; v.status === 'warning')).length,\r\n        empty: appState.records.filter(r =&gt; !r.name &amp;&amp; !r.surname).length,\r\n        redFields: 0,\r\n        emptyPlaces: 0,\r\n        ageDistribution: {},\r\n        commonSurnames: {},\r\n        recordsByYear: {},\r\n        recordsByPlace: {}\r\n    };\r\n    \r\n    appState.records.forEach(record =&gt; {\r\n        // Liczenie czerwonych pól\r\n        if (record.validation) {\r\n            Object.values(record.validation).forEach(v =&gt; {\r\n                if (v.color === 'red') appState.stats.redFields++;\r\n            });\r\n        }\r\n        \r\n        // Puste miejsca\r\n        if (!record.place) appState.stats.emptyPlaces++;\r\n        \r\n        // Rozkład wieków\r\n        ['fatherAge', 'motherAge'].forEach(field =&gt; {\r\n            const age = record[field];\r\n            if (age) {\r\n                const ageNum = parseInt(age.replace('l.', ''));\r\n                if (ageNum) {\r\n                    const range = Math.floor(ageNum / 10) * 10;\r\n                    appState.stats.ageDistribution[range] = (appState.stats.ageDistribution[range] || 0) + 1;\r\n                }\r\n            }\r\n        });\r\n        \r\n        // Najczęstsze nazwiska\r\n        if (record.surname) {\r\n            appState.stats.commonSurnames[record.surname] = (appState.stats.commonSurnames[record.surname] || 0) + 1;\r\n        }\r\n        \r\n        // Rekordy po roku\r\n        if (record.year) {\r\n            appState.stats.recordsByYear[record.year] = (appState.stats.recordsByYear[record.year] || 0) + 1;\r\n        }\r\n        \r\n        // Rekordy po miejscu\r\n        if (record.place) {\r\n            appState.stats.recordsByPlace[record.place] = (appState.stats.recordsByPlace[record.place] || 0) + 1;\r\n        }\r\n    });\r\n    \r\n    renderStatsPanel();\r\n}\r\n\r\n// Panel statystyk\r\nfunction renderStatsPanel() {\r\n    const panel = document.getElementById('stats-panel');\r\n    panel.innerHTML = &#96;\r\n        &lt;h3&gt;Statystyki kontekstowe&lt;/h3&gt;\r\n        &lt;div class=\"stat-item\"&gt;Rekordów do sprawdzenia: &lt;strong&gt;${appState.stats.redFields}&lt;/strong&gt;&lt;/div&gt;\r\n        &lt;div class=\"stat-item\"&gt;Pustych miejscowości: &lt;strong&gt;${appState.stats.emptyPlaces}&lt;/strong&gt;&lt;/div&gt;\r\n        &lt;div class=\"stat-item\"&gt;Najczęstsze nazwisko: &lt;strong&gt;${getMostCommon(appState.stats.commonSurnames)}&lt;/strong&gt;&lt;/div&gt;\r\n        &lt;div class=\"age-chart\"&gt;${renderAgeChart()}&lt;/div&gt;\r\n    &#96;;\r\n}\r\n\r\nfunction renderAgeChart() {\r\n    // Prosty wykres słupkowy wieków\r\n    let html = '&lt;div class=\"age-bars\"&gt;';\r\n    Object.keys(appState.stats.ageDistribution).sort().forEach(range =&gt; {\r\n        const count = appState.stats.ageDistribution[range];\r\n        const height = Math.min(count * 5, 100); // Skalowanie\r\n        html += &#96;&lt;div class=\"age-bar\" style=\"height: ${height}px\" title=\"${range}-${parseInt(range)+9} lat: ${count}\"&gt;${count}&lt;/div&gt;&#96;;\r\n    });\r\n    html += '&lt;/div&gt;';\r\n    return html;\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.2.2: System tagów ręcznych**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do struktury rekordu\r\n// record.tags = ['do-weryfikacji', 'rodzina-wlasna', 'blad-transkrypcji']\r\n\r\n// Dodaj do appState\r\nappState.availableTags = [\r\n    { id: 'do-weryfikacji', label: 'Do weryfikacji', color: '#ff6b6b' },\r\n    { id: 'rodzina-wlasna', label: 'Rodzina własna', color: '#4ecdc4' },\r\n    { id: 'blad-transkrypcji', label: 'Błąd transkrypcji', color: '#ffa726' },\r\n    { id: 'priorytet-wysoki', label: 'Priorytet wysoki', color: '#e91e63' }\r\n];\r\n\r\n// Funkcje zarządzania tagami\r\nfunction addTagToRecord(recordId, tagId) {\r\n    const record = appState.records.find(r =&gt; r.id === recordId);\r\n    if (record) {\r\n        if (!record.tags) record.tags = [];\r\n        if (!record.tags.includes(tagId)) {\r\n            record.tags.push(tagId);\r\n            record.isModified = true;\r\n            renderTable();\r\n        }\r\n    }\r\n}\r\n\r\nfunction removeTagFromRecord(recordId, tagId) {\r\n    const record = appState.records.find(r =&gt; r.id === recordId);\r\n    if (record &amp;&amp; record.tags) {\r\n        record.tags = record.tags.filter(t =&gt; t !== tagId);\r\n        record.isModified = true;\r\n        renderTable();\r\n    }\r\n}\r\n\r\n// W createTableRow() - dodaj kolorowy pasek tagów\r\nfunction createTableRow(record) {\r\n    const tr = document.createElement('tr');\r\n    \r\n    // Kolorowy pasek po lewej\r\n    if (record.tags &amp;&amp; record.tags.length &gt; 0) {\r\n        const tagBar = document.createElement('td');\r\n        tagBar.className = 'tag-bar';\r\n        record.tags.forEach(tagId =&gt; {\r\n            const tag = appState.availableTags.find(t =&gt; t.id === tagId);\r\n            if (tag) {\r\n                const tagDiv = document.createElement('div');\r\n                tagDiv.className = 'tag-indicator';\r\n                tagDiv.style.backgroundColor = tag.color;\r\n                tagDiv.title = tag.label;\r\n                tagBar.appendChild(tagDiv);\r\n            }\r\n        });\r\n        tr.appendChild(tagBar);\r\n    } else {\r\n        tr.appendChild(document.createElement('td')); // Pusta komórka\r\n    }\r\n    \r\n    // Reszta komórek...\r\n    // ...\r\n    \r\n    return tr;\r\n}\r\n\r\n// Filtry po tagach\r\nfunction filterByTags(selectedTags) {\r\n    appState.filters.tags = selectedTags;\r\n    renderTable();\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.2.3: Konfigurowalny widok tabeli**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do appState\r\nappState.tableConfig = {\r\n    visibleColumns: ['id', 'name', 'surname', 'fatherName', 'motherName', 'place', 'recordType'],\r\n    columnOrder: ['id', 'name', 'surname', 'fatherName', 'motherName', 'place', 'recordType'],\r\n    savedConfigs: {}\r\n};\r\n\r\n// Funkcja ładowania konfiguracji\r\nfunction loadTableConfig() {\r\n    const saved = localStorage.getItem('parentValidator_tableConfig');\r\n    if (saved) {\r\n        appState.tableConfig = { ...appState.tableConfig, ...JSON.parse(saved) };\r\n    }\r\n}\r\n\r\n// Zapisywanie konfiguracji\r\nfunction saveTableConfig() {\r\n    localStorage.setItem('parentValidator_tableConfig', JSON.stringify(appState.tableConfig));\r\n}\r\n\r\n// Panel ustawień kolumn\r\nfunction showColumnSettings() {\r\n    const modal = document.createElement('div');\r\n    modal.className = 'modal';\r\n    modal.innerHTML = &#96;\r\n        &lt;div class=\"modal-content\"&gt;\r\n            &lt;h3&gt;Ustawienia widoku tabeli&lt;/h3&gt;\r\n            &lt;div class=\"column-settings\"&gt;\r\n                ${appState.tableConfig.visibleColumns.map(col =&gt; &#96;\r\n                    &lt;label&gt;\r\n                        &lt;input type=\"checkbox\" \r\n                               ${appState.tableConfig.visibleColumns.includes(col) ? 'checked' : ''} \r\n                               onchange=\"toggleColumn('${col}', this.checked)\"&gt;\r\n                        ${col}\r\n                    &lt;/label&gt;\r\n                &#96;).join('')}\r\n            &lt;/div&gt;\r\n            &lt;div class=\"column-order\"&gt;\r\n                &lt;h4&gt;Kolejność kolumn (drag &amp; drop)&lt;/h4&gt;\r\n                &lt;ul id=\"column-list\"&gt;\r\n                    ${appState.tableConfig.columnOrder.map(col =&gt; &#96;&lt;li draggable=\"true\" data-col=\"${col}\"&gt;${col}&lt;/li&gt;&#96;).join('')}\r\n                &lt;/ul&gt;\r\n            &lt;/div&gt;\r\n            &lt;button onclick=\"applyTableSettings()\"&gt;Zastosuj&lt;/button&gt;\r\n            &lt;button onclick=\"this.closest('.modal').remove()\"&gt;Zamknij&lt;/button&gt;\r\n        &lt;/div&gt;\r\n    &#96;;\r\n    document.body.appendChild(modal);\r\n    \r\n    // Dodaj drag &amp; drop\r\n    setupDragAndDrop();\r\n}\r\n\r\nfunction toggleColumn(column, visible) {\r\n    if (visible &amp;&amp; !appState.tableConfig.visibleColumns.includes(column)) {\r\n        appState.tableConfig.visibleColumns.push(column);\r\n    } else if (!visible) {\r\n        appState.tableConfig.visibleColumns = appState.tableConfig.visibleColumns.filter(c =&gt; c !== column);\r\n    }\r\n}\r\n\r\nfunction applyTableSettings() {\r\n    saveTableConfig();\r\n    renderTable();\r\n    document.querySelector('.modal').remove();\r\n}\r\n&#96;&#96;&#96;\r\n\r\n### **Faza 2.3 - Advanced Features**\r\n\r\n#### **2.3.1: Tryb karta na mobile**\r\n&#96;&#96;&#96;javascript\r\n// Detekcja urządzenia\r\nfunction isMobileView() {\r\n    return window.innerWidth &lt; 768;\r\n}\r\n\r\n// Przełączanie trybu wyświetlania\r\nfunction updateViewMode() {\r\n    appState.viewMode = isMobileView() ? 'cards' : 'table';\r\n    renderTable();\r\n}\r\n\r\n// Renderowanie kart\r\nfunction renderCards() {\r\n    const container = document.getElementById('table-container');\r\n    container.innerHTML = '';\r\n    \r\n    appState.records.forEach(record =&gt; {\r\n        const card = document.createElement('div');\r\n        card.className = 'record-card';\r\n        card.innerHTML = &#96;\r\n            &lt;div class=\"card-header\" onclick=\"toggleCard(this)\"&gt;\r\n                &lt;span class=\"record-id\"&gt;${record.id}&lt;/span&gt;\r\n                &lt;span class=\"record-type\"&gt;${record.recordType}&lt;/span&gt;\r\n            &lt;/div&gt;\r\n            &lt;div class=\"card-content\"&gt;\r\n                &lt;div class=\"card-field\"&gt;&lt;strong&gt;Imię:&lt;/strong&gt; ${record.name || '-'}&lt;/div&gt;\r\n                &lt;div class=\"card-field\"&gt;&lt;strong&gt;Nazwisko:&lt;/strong&gt; ${record.surname || '-'}&lt;/div&gt;\r\n                &lt;div class=\"card-field\"&gt;&lt;strong&gt;Ojciec:&lt;/strong&gt; ${record.fatherName || '-'} ${record.fatherSurname || ''}&lt;/div&gt;\r\n                &lt;div class=\"card-field\"&gt;&lt;strong&gt;Matka:&lt;/strong&gt; ${record.motherName || '-'} ${record.motherSurname || ''}&lt;/div&gt;\r\n                &lt;div class=\"card-field\"&gt;&lt;strong&gt;Miejscowość:&lt;/strong&gt; ${record.place || '-'}&lt;/div&gt;\r\n                &lt;button onclick=\"openEditModal('${record.id}')\"&gt;Edytuj&lt;/button&gt;\r\n            &lt;/div&gt;\r\n        &#96;;\r\n        container.appendChild(card);\r\n    });\r\n}\r\n\r\nfunction toggleCard(header) {\r\n    header.nextElementSibling.classList.toggle('expanded');\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.3.2: Zaawansowany eksport**\r\n&#96;&#96;&#96;javascript\r\n// Rozszerz buildTSV o opcje\r\nfunction buildTSV(options = {}) {\r\n    const {\r\n        onlyModified = false,\r\n        includeOriginal = false,\r\n        includeValidation = false,\r\n        format = 'tsv' // 'tsv', 'csv', 'excel'\r\n    } = options;\r\n    \r\n    let records = appState.records;\r\n    if (onlyModified) {\r\n        records = records.filter(r =&gt; r.isModified);\r\n    }\r\n    \r\n    // Wybór kolumn\r\n    const columns = appState.tableConfig.visibleColumns;\r\n    \r\n    // Nagłówki\r\n    let headers = columns;\r\n    if (includeOriginal) headers.push('originalText');\r\n    if (includeValidation) headers.push('validationSummary');\r\n    \r\n    // Dane\r\n    const rows = records.map(record =&gt; {\r\n        const row = columns.map(col =&gt; record[col] || '');\r\n        \r\n        if (includeOriginal) row.push(record.originalText || '');\r\n        if (includeValidation) row.push(JSON.stringify(record.validation || {}));\r\n        \r\n        return row;\r\n    });\r\n    \r\n    // Formatowanie\r\n    const delimiter = format === 'csv' ? ',' : '\\t';\r\n    const content = [headers, ...rows]\r\n        .map(row =&gt; row.map(cell =&gt; &#96;\"${cell.replace(/\"/g, '\"\"')}\"&#96;).join(delimiter))\r\n        .join('\\n');\r\n    \r\n    // Dla Excel - dodaj BOM\r\n    if (format === 'excel') {\r\n        return '\\ufeff' + content;\r\n    }\r\n    \r\n    return content;\r\n}\r\n\r\n// UI dla opcji eksportu\r\nfunction showExportOptions() {\r\n    const modal = document.createElement('div');\r\n    modal.className = 'modal';\r\n    modal.innerHTML = &#96;\r\n        &lt;div class=\"modal-content\"&gt;\r\n            &lt;h3&gt;Opcje eksportu&lt;/h3&gt;\r\n            &lt;label&gt;&lt;input type=\"checkbox\" id=\"only-modified\"&gt; Tylko zmodyfikowane rekordy&lt;/label&gt;\r\n            &lt;label&gt;&lt;input type=\"checkbox\" id=\"include-original\"&gt; Włącz oryginalny tekst&lt;/label&gt;\r\n            &lt;label&gt;&lt;input type=\"checkbox\" id=\"include-validation\"&gt; Włącz sugestie walidacji&lt;/label&gt;\r\n            &lt;select id=\"export-format\"&gt;\r\n                &lt;option value=\"tsv\"&gt;TSV&lt;/option&gt;\r\n                &lt;option value=\"csv\"&gt;CSV&lt;/option&gt;\r\n                &lt;option value=\"excel\"&gt;Excel&lt;/option&gt;\r\n            &lt;/select&gt;\r\n            &lt;button onclick=\"performExport()\"&gt;Eksportuj&lt;/button&gt;\r\n            &lt;button onclick=\"this.closest('.modal').remove()\"&gt;Anuluj&lt;/button&gt;\r\n        &lt;/div&gt;\r\n    &#96;;\r\n    document.body.appendChild(modal);\r\n}\r\n\r\nfunction performExport() {\r\n    const options = {\r\n        onlyModified: document.getElementById('only-modified').checked,\r\n        includeOriginal: document.getElementById('include-original').checked,\r\n        includeValidation: document.getElementById('include-validation').checked,\r\n        format: document.getElementById('export-format').value\r\n    };\r\n    \r\n    const content = buildTSV(options);\r\n    const filename = &#96;export_${new Date().toISOString().split('T')[0]}.${options.format}&#96;;\r\n    \r\n    downloadFile(content, filename);\r\n    document.querySelector('.modal').remove();\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.3.3: Podgląd pliku przed wczytaniem**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do parseAndLoadPastedData\r\nfunction parseAndLoadPastedData() {\r\n    const input = document.getElementById('data-input').value;\r\n    if (!input.trim()) return;\r\n    \r\n    // Najpierw pokaż podgląd\r\n    showFilePreview(input);\r\n}\r\n\r\nfunction showFilePreview(content) {\r\n    // Wykryj delimiter\r\n    const lines = content.split('\\n').slice(0, 10); // Pierwsze 10 linii\r\n    const detectedDelimiter = detectDelimiter(lines[0]);\r\n    const recordCount = content.split('\\n').length - 1; // Minus nagłówek\r\n    \r\n    // Próba parsowania pierwszego rekordu\r\n    const sampleRecord = lines[1] ? parseLine(lines[1], detectedDelimiter) : {};\r\n    const detectedType = detectRecordTypeFromSample(sampleRecord);\r\n    \r\n    const modal = document.createElement('div');\r\n    modal.className = 'modal';\r\n    modal.innerHTML = &#96;\r\n        &lt;div class=\"modal-content\"&gt;\r\n            &lt;h3&gt;Podgląd pliku&lt;/h3&gt;\r\n            &lt;div class=\"preview-info\"&gt;\r\n                &lt;p&gt;&lt;strong&gt;Wykrytych rekordów:&lt;/strong&gt; ${recordCount}&lt;/p&gt;\r\n                &lt;p&gt;&lt;strong&gt;Wykryty typ:&lt;/strong&gt; ${detectedType}&lt;/p&gt;\r\n                &lt;p&gt;&lt;strong&gt;Delimiter:&lt;/strong&gt; ${detectedDelimiter === '\\t' ? 'Tab' : detectedDelimiter === ';' ? 'Średnik' : 'Spacja'}&lt;/p&gt;\r\n            &lt;/div&gt;\r\n            &lt;div class=\"preview-table\"&gt;\r\n                &lt;table&gt;\r\n                    &lt;thead&gt;&lt;tr&gt;${lines[0].split(detectedDelimiter).map(h =&gt; &#96;&lt;th&gt;${h}&lt;/th&gt;&#96;).join('')}&lt;/tr&gt;&lt;/thead&gt;\r\n                    &lt;tbody&gt;${lines.slice(1, 6).map(line =&gt; \r\n                        &#96;&lt;tr&gt;${line.split(detectedDelimiter).map(cell =&gt; &#96;&lt;td&gt;${cell}&lt;/td&gt;&#96;).join('')}&lt;/tr&gt;&#96;\r\n                    ).join('')}&lt;/tbody&gt;\r\n                &lt;/table&gt;\r\n            &lt;/div&gt;\r\n            &lt;div class=\"delimiter-selection\"&gt;\r\n                &lt;label&gt;Delimiter: \r\n                    &lt;select id=\"delimiter-select\"&gt;\r\n                        &lt;option value=\"\\t\" ${detectedDelimiter === '\\t' ? 'selected' : ''}&gt;Tab&lt;/option&gt;\r\n                        &lt;option value=\";\" ${detectedDelimiter === ';' ? 'selected' : ''}&gt;Średnik&lt;/option&gt;\r\n                        &lt;option value=\" \" ${detectedDelimiter === ' ' ? 'selected' : ''}&gt;Spacja&lt;/option&gt;\r\n                    &lt;/select&gt;\r\n                &lt;/label&gt;\r\n            &lt;/div&gt;\r\n            &lt;button onclick=\"confirmLoad('${detectedDelimiter}')\"&gt;Wczytaj dane&lt;/button&gt;\r\n            &lt;button onclick=\"this.closest('.modal').remove()\"&gt;Anuluj&lt;/button&gt;\r\n        &lt;/div&gt;\r\n    &#96;;\r\n    document.body.appendChild(modal);\r\n}\r\n\r\nfunction detectDelimiter(firstLine) {\r\n    const tabCount = (firstLine.match(/\\t/g) || []).length;\r\n    const semicolonCount = (firstLine.match(/;/g) || []).length;\r\n    const spaceCount = (firstLine.match(/ +/g) || []).length;\r\n    \r\n    if (tabCount &gt; semicolonCount &amp;&amp; tabCount &gt; spaceCount) return '\\t';\r\n    if (semicolonCount &gt; tabCount &amp;&amp; semicolonCount &gt; spaceCount) return ';';\r\n    return ' '; // Default\r\n}\r\n\r\nfunction confirmLoad(delimiter) {\r\n    const selectedDelimiter = document.getElementById('delimiter-select').value;\r\n    // Kontynuuj parsowanie z wybranym delimiterem\r\n    document.querySelector('.modal').remove();\r\n    // ... reszta logiki parsowania\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.3.4: Bulk tagging czerwonych pól**\r\n&#96;&#96;&#96;javascript\r\nfunction tagAllRedRecords() {\r\n    const tagId = 'do-weryfikacji';\r\n    let taggedCount = 0;\r\n    \r\n    appState.records.forEach(record =&gt; {\r\n        // Sprawdź czy ma czerwone pola\r\n        const hasRedFields = record.validation &amp;&amp; \r\n            Object.values(record.validation).some(v =&gt; v.color === 'red');\r\n        \r\n        if (hasRedFields) {\r\n            if (!record.tags) record.tags = [];\r\n            if (!record.tags.includes(tagId)) {\r\n                record.tags.push(tagId);\r\n                taggedCount++;\r\n            }\r\n        }\r\n    });\r\n    \r\n    if (taggedCount &gt; 0) {\r\n        renderTable();\r\n        alert(&#96;Oznaczono ${taggedCount} rekordów jako \"do weryfikacji\"&#96;);\r\n    } else {\r\n        alert('Brak rekordów z czerwonymi polami do oznaczenia');\r\n    }\r\n}\r\n\r\n// Dodaj przycisk do UI\r\nfunction addBulkTagButton() {\r\n    const toolbar = document.getElementById('toolbar');\r\n    const btn = document.createElement('button');\r\n    btn.textContent = 'Oznacz czerwone';\r\n    btn.onclick = tagAllRedRecords;\r\n    toolbar.appendChild(btn);\r\n}\r\n&#96;&#96;&#96;\r\n\r\n---\r\n\r\n## \n&#96;&#96;&#96;\n\n",
+  "textEditContent": "🚀 **FAZA 2.1+: UX ENHANCEMENTS - SZCZEGÓŁOWA IMPLEMENTACJA**\r\n\r\n### **Faza 2.1 - Core UX Enhancements (Po migracji podstawowej)**\r\n\r\n#### **2.1.1: Persistencia sesji w przeglądarce**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do appState\r\nconst appState = {\r\n    // ... istniejące pola\r\n    session: {\r\n        lastSaved: null,\r\n        autoSaveInterval: 30000, // 30 sekund\r\n        originalRecords: [] // Kopia oryginalnych danych\r\n    }\r\n};\r\n\r\n// Funkcja auto-zapisu\r\nfunction startAutoSave() {\r\n    setInterval(() =&gt; {\r\n        if (appState.records.length &gt; 0) {\r\n            saveSessionToStorage();\r\n        }\r\n    }, appState.session.autoSaveInterval);\r\n}\r\n\r\n// Zapisywanie sesji\r\nfunction saveSessionToStorage() {\r\n    const sessionData = {\r\n        records: appState.records,\r\n        filters: appState.filters,\r\n        timestamp: Date.now(),\r\n        version: appState.version\r\n    };\r\n    localStorage.setItem('parentValidator_session', JSON.stringify(sessionData));\r\n    appState.session.lastSaved = new Date();\r\n    console.log('✅ Sesja zapisana:', new Date().toLocaleTimeString());\r\n}\r\n\r\n// Odzyskiwanie przy starcie\r\nfunction loadSessionFromStorage() {\r\n    const saved = localStorage.getItem('parentValidator_session');\r\n    if (saved) {\r\n        try {\r\n            const sessionData = JSON.parse(saved);\r\n            const savedDate = new Date(sessionData.timestamp);\r\n            \r\n            // Pytaj użytkownika o odzyskanie\r\n            if (confirm(&#96;Odzyskać ostatnią sesję z ${savedDate.toLocaleString()}?&#96;)) {\r\n                appState.records = sessionData.records;\r\n                appState.filters = sessionData.filters;\r\n                appState.session.originalRecords = [...sessionData.records]; // Kopia oryginalnych\r\n                renderTable();\r\n                updateStats();\r\n                return true;\r\n            }\r\n        } catch (e) {\r\n            console.warn('Błąd ładowania sesji:', e);\r\n        }\r\n    }\r\n    return false;\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.1.2: Tryb porównania zmian**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do appState\r\nappState.viewMode = 'normal'; // 'normal' | 'changes-only'\r\n\r\n// Funkcja pokazywania zmian\r\nfunction toggleChangesView() {\r\n    appState.viewMode = appState.viewMode === 'normal' ? 'changes-only' : 'normal';\r\n    renderTable();\r\n}\r\n\r\n// W renderTable() - filtrowanie widocznych wierszy\r\nfunction renderTable() {\r\n    const visibleRecords = appState.viewMode === 'changes-only' \r\n        ? appState.records.filter(r =&gt; r.isModified)\r\n        : appState.records;\r\n    \r\n    // Renderuj tylko visibleRecords\r\n    // ...\r\n}\r\n\r\n// W createTableRow() - podświetlanie zmian\r\nfunction createTableRow(record) {\r\n    const tr = document.createElement('tr');\r\n    \r\n    if (record.isModified) {\r\n        tr.classList.add('row-modified');\r\n    }\r\n    \r\n    // Dla każdej komórki sprawdź czy się zmieniła\r\n    fields.forEach(field =&gt; {\r\n        const td = document.createElement('td');\r\n        const value = record[field];\r\n        const originalValue = getOriginalValue(record.id, field);\r\n        \r\n        if (value !== originalValue) {\r\n            td.classList.add('cell-changed');\r\n            td.title = &#96;Zmienione: ${originalValue} → ${value}&#96;;\r\n        }\r\n        \r\n        td.textContent = value || '';\r\n        tr.appendChild(td);\r\n    });\r\n    \r\n    return tr;\r\n}\r\n\r\nfunction getOriginalValue(recordId, field) {\r\n    const original = appState.session.originalRecords.find(r =&gt; r.id === recordId);\r\n    return original ? original[field] : '';\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.1.3: Global undo system**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do appState\r\nappState.undoStack = [];\r\nappState.undoIndex = -1;\r\n\r\n// Funkcja zapisywania akcji\r\nfunction saveAction(action) {\r\n    const actionEntry = {\r\n        type: action.type, // 'update', 'bulk-update', etc.\r\n        recordId: action.recordId,\r\n        field: action.field,\r\n        oldValue: action.oldValue,\r\n        newValue: action.newValue,\r\n        timestamp: Date.now()\r\n    };\r\n    \r\n    // Usuń przyszłe akcje jeśli jesteśmy w środku undo\r\n    appState.undoStack = appState.undoStack.slice(0, appState.undoIndex + 1);\r\n    \r\n    appState.undoStack.push(actionEntry);\r\n    appState.undoIndex = appState.undoStack.length - 1;\r\n    \r\n    // Limit do 50 akcji\r\n    if (appState.undoStack.length &gt; 50) {\r\n        appState.undoStack.shift();\r\n        appState.undoIndex--;\r\n    }\r\n}\r\n\r\n// Funkcja cofania\r\nfunction undoLastAction() {\r\n    if (appState.undoIndex &gt;= 0) {\r\n        const action = appState.undoStack[appState.undoIndex];\r\n        \r\n        // Cofnij akcję\r\n        const record = appState.records.find(r =&gt; r.id === action.recordId);\r\n        if (record) {\r\n            record[action.field] = action.oldValue;\r\n            record.isModified = true;\r\n            validateRecordLocal(record);\r\n        }\r\n        \r\n        appState.undoIndex--;\r\n        renderTable();\r\n        updateStats();\r\n        \r\n        console.log('Cofnięto:', action);\r\n    }\r\n}\r\n\r\n// Dodaj przycisk do UI\r\nfunction addUndoButton() {\r\n    const toolbar = document.getElementById('toolbar');\r\n    const undoBtn = document.createElement('button');\r\n    undoBtn.id = 'undo-btn';\r\n    undoBtn.textContent = 'Cofnij';\r\n    undoBtn.onclick = undoLastAction;\r\n    undoBtn.disabled = appState.undoIndex &lt; 0;\r\n    toolbar.appendChild(undoBtn);\r\n}\r\n&#96;&#96;&#96;\r\n\r\n### **Faza 2.2 - Data Management &amp; Analytics**\r\n\r\n#### **2.2.1: Statystyki kontekstowe**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do appState\r\nappState.stats = {\r\n    total: 0,\r\n    validated: 0,\r\n    warnings: 0,\r\n    empty: 0,\r\n    // Nowe statystyki\r\n    redFields: 0,\r\n    emptyPlaces: 0,\r\n    ageDistribution: {},\r\n    commonSurnames: {},\r\n    recordsByYear: {},\r\n    recordsByPlace: {}\r\n};\r\n\r\n// Funkcja obliczania statystyk\r\nfunction calculateDetailedStats() {\r\n    appState.stats = {\r\n        total: appState.records.length,\r\n        validated: appState.records.filter(r =&gt; r.validation &amp;&amp; Object.values(r.validation).every(v =&gt; v.status === 'valid')).length,\r\n        warnings: appState.records.filter(r =&gt; r.validation &amp;&amp; Object.values(r.validation).some(v =&gt; v.status === 'warning')).length,\r\n        empty: appState.records.filter(r =&gt; !r.name &amp;&amp; !r.surname).length,\r\n        redFields: 0,\r\n        emptyPlaces: 0,\r\n        ageDistribution: {},\r\n        commonSurnames: {},\r\n        recordsByYear: {},\r\n        recordsByPlace: {}\r\n    };\r\n    \r\n    appState.records.forEach(record =&gt; {\r\n        // Liczenie czerwonych pól\r\n        if (record.validation) {\r\n            Object.values(record.validation).forEach(v =&gt; {\r\n                if (v.color === 'red') appState.stats.redFields++;\r\n            });\r\n        }\r\n        \r\n        // Puste miejsca\r\n        if (!record.place) appState.stats.emptyPlaces++;\r\n        \r\n        // Rozkład wieków\r\n        ['fatherAge', 'motherAge'].forEach(field =&gt; {\r\n            const age = record[field];\r\n            if (age) {\r\n                const ageNum = parseInt(age.replace('l.', ''));\r\n                if (ageNum) {\r\n                    const range = Math.floor(ageNum / 10) * 10;\r\n                    appState.stats.ageDistribution[range] = (appState.stats.ageDistribution[range] || 0) + 1;\r\n                }\r\n            }\r\n        });\r\n        \r\n        // Najczęstsze nazwiska\r\n        if (record.surname) {\r\n            appState.stats.commonSurnames[record.surname] = (appState.stats.commonSurnames[record.surname] || 0) + 1;\r\n        }\r\n        \r\n        // Rekordy po roku\r\n        if (record.year) {\r\n            appState.stats.recordsByYear[record.year] = (appState.stats.recordsByYear[record.year] || 0) + 1;\r\n        }\r\n        \r\n        // Rekordy po miejscu\r\n        if (record.place) {\r\n            appState.stats.recordsByPlace[record.place] = (appState.stats.recordsByPlace[record.place] || 0) + 1;\r\n        }\r\n    });\r\n    \r\n    renderStatsPanel();\r\n}\r\n\r\n// Panel statystyk\r\nfunction renderStatsPanel() {\r\n    const panel = document.getElementById('stats-panel');\r\n    panel.innerHTML = &#96;\r\n        &lt;h3&gt;Statystyki kontekstowe&lt;/h3&gt;\r\n        &lt;div class=\"stat-item\"&gt;Rekordów do sprawdzenia: &lt;strong&gt;${appState.stats.redFields}&lt;/strong&gt;&lt;/div&gt;\r\n        &lt;div class=\"stat-item\"&gt;Pustych miejscowości: &lt;strong&gt;${appState.stats.emptyPlaces}&lt;/strong&gt;&lt;/div&gt;\r\n        &lt;div class=\"stat-item\"&gt;Najczęstsze nazwisko: &lt;strong&gt;${getMostCommon(appState.stats.commonSurnames)}&lt;/strong&gt;&lt;/div&gt;\r\n        &lt;div class=\"age-chart\"&gt;${renderAgeChart()}&lt;/div&gt;\r\n    &#96;;\r\n}\r\n\r\nfunction renderAgeChart() {\r\n    // Prosty wykres słupkowy wieków\r\n    let html = '&lt;div class=\"age-bars\"&gt;';\r\n    Object.keys(appState.stats.ageDistribution).sort().forEach(range =&gt; {\r\n        const count = appState.stats.ageDistribution[range];\r\n        const height = Math.min(count * 5, 100); // Skalowanie\r\n        html += &#96;&lt;div class=\"age-bar\" style=\"height: ${height}px\" title=\"${range}-${parseInt(range)+9} lat: ${count}\"&gt;${count}&lt;/div&gt;&#96;;\r\n    });\r\n    html += '&lt;/div&gt;';\r\n    return html;\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.2.2: System tagów ręcznych**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do struktury rekordu\r\n// record.tags = ['do-weryfikacji', 'rodzina-wlasna', 'blad-transkrypcji']\r\n\r\n// Dodaj do appState\r\nappState.availableTags = [\r\n    { id: 'do-weryfikacji', label: 'Do weryfikacji', color: '#ff6b6b' },\r\n    { id: 'rodzina-wlasna', label: 'Rodzina własna', color: '#4ecdc4' },\r\n    { id: 'blad-transkrypcji', label: 'Błąd transkrypcji', color: '#ffa726' },\r\n    { id: 'priorytet-wysoki', label: 'Priorytet wysoki', color: '#e91e63' }\r\n];\r\n\r\n// Funkcje zarządzania tagami\r\nfunction addTagToRecord(recordId, tagId) {\r\n    const record = appState.records.find(r =&gt; r.id === recordId);\r\n    if (record) {\r\n        if (!record.tags) record.tags = [];\r\n        if (!record.tags.includes(tagId)) {\r\n            record.tags.push(tagId);\r\n            record.isModified = true;\r\n            renderTable();\r\n        }\r\n    }\r\n}\r\n\r\nfunction removeTagFromRecord(recordId, tagId) {\r\n    const record = appState.records.find(r =&gt; r.id === recordId);\r\n    if (record &amp;&amp; record.tags) {\r\n        record.tags = record.tags.filter(t =&gt; t !== tagId);\r\n        record.isModified = true;\r\n        renderTable();\r\n    }\r\n}\r\n\r\n// W createTableRow() - dodaj kolorowy pasek tagów\r\nfunction createTableRow(record) {\r\n    const tr = document.createElement('tr');\r\n    \r\n    // Kolorowy pasek po lewej\r\n    if (record.tags &amp;&amp; record.tags.length &gt; 0) {\r\n        const tagBar = document.createElement('td');\r\n        tagBar.className = 'tag-bar';\r\n        record.tags.forEach(tagId =&gt; {\r\n            const tag = appState.availableTags.find(t =&gt; t.id === tagId);\r\n            if (tag) {\r\n                const tagDiv = document.createElement('div');\r\n                tagDiv.className = 'tag-indicator';\r\n                tagDiv.style.backgroundColor = tag.color;\r\n                tagDiv.title = tag.label;\r\n                tagBar.appendChild(tagDiv);\r\n            }\r\n        });\r\n        tr.appendChild(tagBar);\r\n    } else {\r\n        tr.appendChild(document.createElement('td')); // Pusta komórka\r\n    }\r\n    \r\n    // Reszta komórek...\r\n    // ...\r\n    \r\n    return tr;\r\n}\r\n\r\n// Filtry po tagach\r\nfunction filterByTags(selectedTags) {\r\n    appState.filters.tags = selectedTags;\r\n    renderTable();\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.2.3: Konfigurowalny widok tabeli**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do appState\r\nappState.tableConfig = {\r\n    visibleColumns: ['id', 'name', 'surname', 'fatherName', 'motherName', 'place', 'recordType'],\r\n    columnOrder: ['id', 'name', 'surname', 'fatherName', 'motherName', 'place', 'recordType'],\r\n    savedConfigs: {}\r\n};\r\n\r\n// Funkcja ładowania konfiguracji\r\nfunction loadTableConfig() {\r\n    const saved = localStorage.getItem('parentValidator_tableConfig');\r\n    if (saved) {\r\n        appState.tableConfig = { ...appState.tableConfig, ...JSON.parse(saved) };\r\n    }\r\n}\r\n\r\n// Zapisywanie konfiguracji\r\nfunction saveTableConfig() {\r\n    localStorage.setItem('parentValidator_tableConfig', JSON.stringify(appState.tableConfig));\r\n}\r\n\r\n// Panel ustawień kolumn\r\nfunction showColumnSettings() {\r\n    const modal = document.createElement('div');\r\n    modal.className = 'modal';\r\n    modal.innerHTML = &#96;\r\n        &lt;div class=\"modal-content\"&gt;\r\n            &lt;h3&gt;Ustawienia widoku tabeli&lt;/h3&gt;\r\n            &lt;div class=\"column-settings\"&gt;\r\n                ${appState.tableConfig.visibleColumns.map(col =&gt; &#96;\r\n                    &lt;label&gt;\r\n                        &lt;input type=\"checkbox\" \r\n                               ${appState.tableConfig.visibleColumns.includes(col) ? 'checked' : ''} \r\n                               onchange=\"toggleColumn('${col}', this.checked)\"&gt;\r\n                        ${col}\r\n                    &lt;/label&gt;\r\n                &#96;).join('')}\r\n            &lt;/div&gt;\r\n            &lt;div class=\"column-order\"&gt;\r\n                &lt;h4&gt;Kolejność kolumn (drag &amp; drop)&lt;/h4&gt;\r\n                &lt;ul id=\"column-list\"&gt;\r\n                    ${appState.tableConfig.columnOrder.map(col =&gt; &#96;&lt;li draggable=\"true\" data-col=\"${col}\"&gt;${col}&lt;/li&gt;&#96;).join('')}\r\n                &lt;/ul&gt;\r\n            &lt;/div&gt;\r\n            &lt;button onclick=\"applyTableSettings()\"&gt;Zastosuj&lt;/button&gt;\r\n            &lt;button onclick=\"this.closest('.modal').remove()\"&gt;Zamknij&lt;/button&gt;\r\n        &lt;/div&gt;\r\n    &#96;;\r\n    document.body.appendChild(modal);\r\n    \r\n    // Dodaj drag &amp; drop\r\n    setupDragAndDrop();\r\n}\r\n\r\nfunction toggleColumn(column, visible) {\r\n    if (visible &amp;&amp; !appState.tableConfig.visibleColumns.includes(column)) {\r\n        appState.tableConfig.visibleColumns.push(column);\r\n    } else if (!visible) {\r\n        appState.tableConfig.visibleColumns = appState.tableConfig.visibleColumns.filter(c =&gt; c !== column);\r\n    }\r\n}\r\n\r\nfunction applyTableSettings() {\r\n    saveTableConfig();\r\n    renderTable();\r\n    document.querySelector('.modal').remove();\r\n}\r\n&#96;&#96;&#96;\r\n\r\n### **Faza 2.3 - Advanced Features**\r\n\r\n#### **2.3.1: Tryb karta na mobile**\r\n&#96;&#96;&#96;javascript\r\n// Detekcja urządzenia\r\nfunction isMobileView() {\r\n    return window.innerWidth &lt; 768;\r\n}\r\n\r\n// Przełączanie trybu wyświetlania\r\nfunction updateViewMode() {\r\n    appState.viewMode = isMobileView() ? 'cards' : 'table';\r\n    renderTable();\r\n}\r\n\r\n// Renderowanie kart\r\nfunction renderCards() {\r\n    const container = document.getElementById('table-container');\r\n    container.innerHTML = '';\r\n    \r\n    appState.records.forEach(record =&gt; {\r\n        const card = document.createElement('div');\r\n        card.className = 'record-card';\r\n        card.innerHTML = &#96;\r\n            &lt;div class=\"card-header\" onclick=\"toggleCard(this)\"&gt;\r\n                &lt;span class=\"record-id\"&gt;${record.id}&lt;/span&gt;\r\n                &lt;span class=\"record-type\"&gt;${record.recordType}&lt;/span&gt;\r\n            &lt;/div&gt;\r\n            &lt;div class=\"card-content\"&gt;\r\n                &lt;div class=\"card-field\"&gt;&lt;strong&gt;Imię:&lt;/strong&gt; ${record.name || '-'}&lt;/div&gt;\r\n                &lt;div class=\"card-field\"&gt;&lt;strong&gt;Nazwisko:&lt;/strong&gt; ${record.surname || '-'}&lt;/div&gt;\r\n                &lt;div class=\"card-field\"&gt;&lt;strong&gt;Ojciec:&lt;/strong&gt; ${record.fatherName || '-'} ${record.fatherSurname || ''}&lt;/div&gt;\r\n                &lt;div class=\"card-field\"&gt;&lt;strong&gt;Matka:&lt;/strong&gt; ${record.motherName || '-'} ${record.motherSurname || ''}&lt;/div&gt;\r\n                &lt;div class=\"card-field\"&gt;&lt;strong&gt;Miejscowość:&lt;/strong&gt; ${record.place || '-'}&lt;/div&gt;\r\n                &lt;button onclick=\"openEditModal('${record.id}')\"&gt;Edytuj&lt;/button&gt;\r\n            &lt;/div&gt;\r\n        &#96;;\r\n        container.appendChild(card);\r\n    });\r\n}\r\n\r\nfunction toggleCard(header) {\r\n    header.nextElementSibling.classList.toggle('expanded');\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.3.2: Zaawansowany eksport**\r\n&#96;&#96;&#96;javascript\r\n// Rozszerz buildTSV o opcje\r\nfunction buildTSV(options = {}) {\r\n    const {\r\n        onlyModified = false,\r\n        includeOriginal = false,\r\n        includeValidation = false,\r\n        format = 'tsv' // 'tsv', 'csv', 'excel'\r\n    } = options;\r\n    \r\n    let records = appState.records;\r\n    if (onlyModified) {\r\n        records = records.filter(r =&gt; r.isModified);\r\n    }\r\n    \r\n    // Wybór kolumn\r\n    const columns = appState.tableConfig.visibleColumns;\r\n    \r\n    // Nagłówki\r\n    let headers = columns;\r\n    if (includeOriginal) headers.push('originalText');\r\n    if (includeValidation) headers.push('validationSummary');\r\n    \r\n    // Dane\r\n    const rows = records.map(record =&gt; {\r\n        const row = columns.map(col =&gt; record[col] || '');\r\n        \r\n        if (includeOriginal) row.push(record.originalText || '');\r\n        if (includeValidation) row.push(JSON.stringify(record.validation || {}));\r\n        \r\n        return row;\r\n    });\r\n    \r\n    // Formatowanie\r\n    const delimiter = format === 'csv' ? ',' : '\\t';\r\n    const content = [headers, ...rows]\r\n        .map(row =&gt; row.map(cell =&gt; &#96;\"${cell.replace(/\"/g, '\"\"')}\"&#96;).join(delimiter))\r\n        .join('\\n');\r\n    \r\n    // Dla Excel - dodaj BOM\r\n    if (format === 'excel') {\r\n        return '\\ufeff' + content;\r\n    }\r\n    \r\n    return content;\r\n}\r\n\r\n// UI dla opcji eksportu\r\nfunction showExportOptions() {\r\n    const modal = document.createElement('div');\r\n    modal.className = 'modal';\r\n    modal.innerHTML = &#96;\r\n        &lt;div class=\"modal-content\"&gt;\r\n            &lt;h3&gt;Opcje eksportu&lt;/h3&gt;\r\n            &lt;label&gt;&lt;input type=\"checkbox\" id=\"only-modified\"&gt; Tylko zmodyfikowane rekordy&lt;/label&gt;\r\n            &lt;label&gt;&lt;input type=\"checkbox\" id=\"include-original\"&gt; Włącz oryginalny tekst&lt;/label&gt;\r\n            &lt;label&gt;&lt;input type=\"checkbox\" id=\"include-validation\"&gt; Włącz sugestie walidacji&lt;/label&gt;\r\n            &lt;select id=\"export-format\"&gt;\r\n                &lt;option value=\"tsv\"&gt;TSV&lt;/option&gt;\r\n                &lt;option value=\"csv\"&gt;CSV&lt;/option&gt;\r\n                &lt;option value=\"excel\"&gt;Excel&lt;/option&gt;\r\n            &lt;/select&gt;\r\n            &lt;button onclick=\"performExport()\"&gt;Eksportuj&lt;/button&gt;\r\n            &lt;button onclick=\"this.closest('.modal').remove()\"&gt;Anuluj&lt;/button&gt;\r\n        &lt;/div&gt;\r\n    &#96;;\r\n    document.body.appendChild(modal);\r\n}\r\n\r\nfunction performExport() {\r\n    const options = {\r\n        onlyModified: document.getElementById('only-modified').checked,\r\n        includeOriginal: document.getElementById('include-original').checked,\r\n        includeValidation: document.getElementById('include-validation').checked,\r\n        format: document.getElementById('export-format').value\r\n    };\r\n    \r\n    const content = buildTSV(options);\r\n    const filename = &#96;export_${new Date().toISOString().split('T')[0]}.${options.format}&#96;;\r\n    \r\n    downloadFile(content, filename);\r\n    document.querySelector('.modal').remove();\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.3.3: Podgląd pliku przed wczytaniem**\r\n&#96;&#96;&#96;javascript\r\n// Dodaj do parseAndLoadPastedData\r\nfunction parseAndLoadPastedData() {\r\n    const input = document.getElementById('data-input').value;\r\n    if (!input.trim()) return;\r\n    \r\n    // Najpierw pokaż podgląd\r\n    showFilePreview(input);\r\n}\r\n\r\nfunction showFilePreview(content) {\r\n    // Wykryj delimiter\r\n    const lines = content.split('\\n').slice(0, 10); // Pierwsze 10 linii\r\n    const detectedDelimiter = detectDelimiter(lines[0]);\r\n    const recordCount = content.split('\\n').length - 1; // Minus nagłówek\r\n    \r\n    // Próba parsowania pierwszego rekordu\r\n    const sampleRecord = lines[1] ? parseLine(lines[1], detectedDelimiter) : {};\r\n    const detectedType = detectRecordTypeFromSample(sampleRecord);\r\n    \r\n    const modal = document.createElement('div');\r\n    modal.className = 'modal';\r\n    modal.innerHTML = &#96;\r\n        &lt;div class=\"modal-content\"&gt;\r\n            &lt;h3&gt;Podgląd pliku&lt;/h3&gt;\r\n            &lt;div class=\"preview-info\"&gt;\r\n                &lt;p&gt;&lt;strong&gt;Wykrytych rekordów:&lt;/strong&gt; ${recordCount}&lt;/p&gt;\r\n                &lt;p&gt;&lt;strong&gt;Wykryty typ:&lt;/strong&gt; ${detectedType}&lt;/p&gt;\r\n                &lt;p&gt;&lt;strong&gt;Delimiter:&lt;/strong&gt; ${detectedDelimiter === '\\t' ? 'Tab' : detectedDelimiter === ';' ? 'Średnik' : 'Spacja'}&lt;/p&gt;\r\n            &lt;/div&gt;\r\n            &lt;div class=\"preview-table\"&gt;\r\n                &lt;table&gt;\r\n                    &lt;thead&gt;&lt;tr&gt;${lines[0].split(detectedDelimiter).map(h =&gt; &#96;&lt;th&gt;${h}&lt;/th&gt;&#96;).join('')}&lt;/tr&gt;&lt;/thead&gt;\r\n                    &lt;tbody&gt;${lines.slice(1, 6).map(line =&gt; \r\n                        &#96;&lt;tr&gt;${line.split(detectedDelimiter).map(cell =&gt; &#96;&lt;td&gt;${cell}&lt;/td&gt;&#96;).join('')}&lt;/tr&gt;&#96;\r\n                    ).join('')}&lt;/tbody&gt;\r\n                &lt;/table&gt;\r\n            &lt;/div&gt;\r\n            &lt;div class=\"delimiter-selection\"&gt;\r\n                &lt;label&gt;Delimiter: \r\n                    &lt;select id=\"delimiter-select\"&gt;\r\n                        &lt;option value=\"\\t\" ${detectedDelimiter === '\\t' ? 'selected' : ''}&gt;Tab&lt;/option&gt;\r\n                        &lt;option value=\";\" ${detectedDelimiter === ';' ? 'selected' : ''}&gt;Średnik&lt;/option&gt;\r\n                        &lt;option value=\" \" ${detectedDelimiter === ' ' ? 'selected' : ''}&gt;Spacja&lt;/option&gt;\r\n                    &lt;/select&gt;\r\n                &lt;/label&gt;\r\n            &lt;/div&gt;\r\n            &lt;button onclick=\"confirmLoad('${detectedDelimiter}')\"&gt;Wczytaj dane&lt;/button&gt;\r\n            &lt;button onclick=\"this.closest('.modal').remove()\"&gt;Anuluj&lt;/button&gt;\r\n        &lt;/div&gt;\r\n    &#96;;\r\n    document.body.appendChild(modal);\r\n}\r\n\r\nfunction detectDelimiter(firstLine) {\r\n    const tabCount = (firstLine.match(/\\t/g) || []).length;\r\n    const semicolonCount = (firstLine.match(/;/g) || []).length;\r\n    const spaceCount = (firstLine.match(/ +/g) || []).length;\r\n    \r\n    if (tabCount &gt; semicolonCount &amp;&amp; tabCount &gt; spaceCount) return '\\t';\r\n    if (semicolonCount &gt; tabCount &amp;&amp; semicolonCount &gt; spaceCount) return ';';\r\n    return ' '; // Default\r\n}\r\n\r\nfunction confirmLoad(delimiter) {\r\n    const selectedDelimiter = document.getElementById('delimiter-select').value;\r\n    // Kontynuuj parsowanie z wybranym delimiterem\r\n    document.querySelector('.modal').remove();\r\n    // ... reszta logiki parsowania\r\n}\r\n&#96;&#96;&#96;\r\n\r\n#### **2.3.4: Bulk tagging czerwonych pól**\r\n&#96;&#96;&#96;javascript\r\nfunction tagAllRedRecords() {\r\n    const tagId = 'do-weryfikacji';\r\n    let taggedCount = 0;\r\n    \r\n    appState.records.forEach(record =&gt; {\r\n        // Sprawdź czy ma czerwone pola\r\n        const hasRedFields = record.validation &amp;&amp; \r\n            Object.values(record.validation).some(v =&gt; v.color === 'red');\r\n        \r\n        if (hasRedFields) {\r\n            if (!record.tags) record.tags = [];\r\n            if (!record.tags.includes(tagId)) {\r\n                record.tags.push(tagId);\r\n                taggedCount++;\r\n            }\r\n        }\r\n    });\r\n    \r\n    if (taggedCount &gt; 0) {\r\n        renderTable();\r\n        alert(&#96;Oznaczono ${taggedCount} rekordów jako \"do weryfikacji\"&#96;);\r\n    } else {\r\n        alert('Brak rekordów z czerwonymi polami do oznaczenia');\r\n    }\r\n}\r\n\r\n// Dodaj przycisk do UI\r\nfunction addBulkTagButton() {\r\n    const toolbar = document.getElementById('toolbar');\r\n    const btn = document.createElement('button');\r\n    btn.textContent = 'Oznacz czerwone';\r\n    btn.onclick = tagAllRedRecords;\r\n    toolbar.appendChild(btn);\r\n}\r\n&#96;&#96;&#96;\r\n\r\n---\r\n\r\n## ",
+  "toolCallResult": null
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/migration-checklist.md#200-200), wiersze 200 do 222</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/migration-checklist.md#200-200), wiersze 200 do 222
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="copilot_replaceString">
+<details>
+<summary>Tool use: **copilot_replaceString**</summary>
+
+Additional data:
+
+```json
+{
+  "vscodeToolId": "copilot_replaceString",
+  "isHidden": true
+}
+```
+Result:
+
+```json
+{
+  "invocationMessage": "Korzystanie z \"Zamień ciąg w pliku\"",
+  "isConfirmed": {
+    "type": 1
+  },
+  "content": "&#96;&#96;&#96;markdown\n## 🚀 **PHASE 2.1+: UX ENHANCEMENTS CHECKLIST**\r\n\r\n### **Faza 2.1 - Core UX Enhancements (Po migracji podstawowej)**\r\n- [ ] Implement session persistence with localStorage auto-save\r\n- [ ] Add session recovery dialog on app start\r\n- [ ] Create originalRecords backup for change comparison\r\n- [ ] Implement \"Show changes\" mode with highlighting\r\n- [ ] Add global undo system with 50-action stack\r\n- [ ] Add undo button to toolbar\r\n- [ ] Test session recovery with real data loss scenarios\r\n\r\n### **Faza 2.2 - Data Management &amp; Analytics**\r\n- [ ] Implement contextual statistics (red fields, empty places, age distribution)\r\n- [ ] Add age distribution chart in stats panel\r\n- [ ] Create manual tagging system with color indicators\r\n- [ ] Add tag filters and bulk tagging\r\n- [ ] Implement configurable table view (column selection)\r\n- [ ] Add drag &amp; drop column reordering\r\n- [ ] Save table preferences to localStorage\r\n- [ ] Test tag system with large datasets\r\n\r\n### **Faza 2.3 - Advanced Features**\r\n- [ ] Implement mobile card view (&lt;768px auto-switch)\r\n- [ ] Add advanced export options (modified only, include metadata)\r\n- [ ] Support multiple export formats (TSV/CSV/Excel)\r\n- [ ] Create file preview before loading with delimiter detection\r\n- [ ] Add bulk tagging for red fields\r\n- [ ] Test mobile responsiveness\r\n- [ ] Test export options with various data sets\r\n\r\n### **Faza 2.4 - Analytics &amp; Integration (Future)**\r\n- [ ] Advanced statistical analysis\r\n- [ ] Data quality reports\r\n- [ ] Genealogical insights\r\n- [ ] Multi-user collaboration features\r\n\r\n---\r\n\n&#96;&#96;&#96;\n\n",
+  "textEditContent": "## 🚀 **PHASE 2.1+: UX ENHANCEMENTS CHECKLIST**\r\n\r\n### **Faza 2.1 - Core UX Enhancements (Po migracji podstawowej)**\r\n- [ ] Implement session persistence with localStorage auto-save\r\n- [ ] Add session recovery dialog on app start\r\n- [ ] Create originalRecords backup for change comparison\r\n- [ ] Implement \"Show changes\" mode with highlighting\r\n- [ ] Add global undo system with 50-action stack\r\n- [ ] Add undo button to toolbar\r\n- [ ] Test session recovery with real data loss scenarios\r\n\r\n### **Faza 2.2 - Data Management &amp; Analytics**\r\n- [ ] Implement contextual statistics (red fields, empty places, age distribution)\r\n- [ ] Add age distribution chart in stats panel\r\n- [ ] Create manual tagging system with color indicators\r\n- [ ] Add tag filters and bulk tagging\r\n- [ ] Implement configurable table view (column selection)\r\n- [ ] Add drag &amp; drop column reordering\r\n- [ ] Save table preferences to localStorage\r\n- [ ] Test tag system with large datasets\r\n\r\n### **Faza 2.3 - Advanced Features**\r\n- [ ] Implement mobile card view (&lt;768px auto-switch)\r\n- [ ] Add advanced export options (modified only, include metadata)\r\n- [ ] Support multiple export formats (TSV/CSV/Excel)\r\n- [ ] Create file preview before loading with delimiter detection\r\n- [ ] Add bulk tagging for red fields\r\n- [ ] Test mobile responsiveness\r\n- [ ] Test export options with various data sets\r\n\r\n### **Faza 2.4 - Analytics &amp; Integration (Future)**\r\n- [ ] Advanced statistical analysis\r\n- [ ] Data quality reports\r\n- [ ] Genealogical insights\r\n- [ ] Multi-user collaboration features\r\n\r\n---\r\n",
+  "toolCallResult": null
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="copilot_replaceString">
+<details>
+<summary>Tool use: **copilot_replaceString**</summary>
+
+Additional data:
+
+```json
+{
+  "vscodeToolId": "copilot_replaceString",
+  "isHidden": true
+}
+```
+Result:
+
+```json
+{
+  "invocationMessage": "Korzystanie z \"Zamień ciąg w pliku\"",
+  "isConfirmed": {
+    "type": 1
+  },
+  "content": "",
+  "textEditContent": "",
+  "toolCallResult": null
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/migration-summary.md#80-80), wiersze 80 do 100</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/migration-summary.md#80-80), wiersze 80 do 100
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="copilot_replaceString">
+<details>
+<summary>Tool use: **copilot_replaceString**</summary>
+
+Additional data:
+
+```json
+{
+  "vscodeToolId": "copilot_replaceString",
+  "isHidden": true
+}
+```
+Result:
+
+```json
+{
+  "invocationMessage": "Korzystanie z \"Zamień ciąg w pliku\"",
+  "isConfirmed": {
+    "type": 1
+  },
+  "content": "&#96;&#96;&#96;markdown\n\ude80 **POST-MIGRATION ENHANCEMENTS ROADMAP**\r\n\r\n### **Faza 2.1 - Core UX Enhancements (Immediate)**\r\n- **Session Persistence:** Auto-save to localStorage every 30s, recovery dialog on startup\r\n- **Change Comparison:** Keep originalRecords[], highlight modified fields\r\n- **Global Undo:** 50-action stack with toolbar button for peace of mind\r\n\r\n### **Faza 2.2 - Data Management &amp; Analytics**\r\n- **Contextual Statistics:** Red fields counter, age distribution charts, common surnames\r\n- **Manual Tagging:** Color-coded tags for record organization and filtering\r\n- **Configurable Views:** Column selection, drag&amp;drop reordering, saved preferences\r\n\r\n### **Faza 2.3 - Advanced Features**\r\n- **Mobile Card View:** Auto-switch to cards on &lt;768px screens\r\n- **Advanced Export:** Modified-only, include metadata, multiple formats\r\n- **File Preview:** Before loading with delimiter detection and sample display\r\n- **Bulk Operations:** Tag all red fields, mass updates\r\n\r\n### **Implementation Priority**\r\n1. **Session persistence** - Prevents data loss (highest impact)\r\n2. **Change comparison** - Quality control for exports\r\n3. **Global undo** - User confidence and error recovery\r\n4. **Contextual stats** - Immediate data quality insights\r\n5. **Manual tagging** - Large dataset organization\r\n6. **Mobile support** - Accessibility improvement\r\n\r\n---\r\n\r\n## \ud83d\n&#96;&#96;&#96;\n\n",
+  "textEditContent": "\ude80 **POST-MIGRATION ENHANCEMENTS ROADMAP**\r\n\r\n### **Faza 2.1 - Core UX Enhancements (Immediate)**\r\n- **Session Persistence:** Auto-save to localStorage every 30s, recovery dialog on startup\r\n- **Change Comparison:** Keep originalRecords[], highlight modified fields\r\n- **Global Undo:** 50-action stack with toolbar button for peace of mind\r\n\r\n### **Faza 2.2 - Data Management &amp; Analytics**\r\n- **Contextual Statistics:** Red fields counter, age distribution charts, common surnames\r\n- **Manual Tagging:** Color-coded tags for record organization and filtering\r\n- **Configurable Views:** Column selection, drag&amp;drop reordering, saved preferences\r\n\r\n### **Faza 2.3 - Advanced Features**\r\n- **Mobile Card View:** Auto-switch to cards on &lt;768px screens\r\n- **Advanced Export:** Modified-only, include metadata, multiple formats\r\n- **File Preview:** Before loading with delimiter detection and sample display\r\n- **Bulk Operations:** Tag all red fields, mass updates\r\n\r\n### **Implementation Priority**\r\n1. **Session persistence** - Prevents data loss (highest impact)\r\n2. **Change comparison** - Quality control for exports\r\n3. **Global undo** - User confidence and error recovery\r\n4. **Contextual stats** - Immediate data quality insights\r\n5. **Manual tagging** - Large dataset organization\r\n6. **Mobile support** - Accessibility improvement\r\n\r\n---\r\n\r\n## \ud83d",
+  "toolCallResult": null
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="run_in_terminal">
+<details>
+<summary>Tool use: **run_in_terminal**</summary>
+
+
+Parameters:
+
+```json
+{
+  "kind": "terminal",
+  "terminalToolSessionId": "5591acc0-1a63-4158-9b4d-d745614cd536",
+  "terminalCommandId": "tool-264ea64d-3324-48fe-b74c-51f9ee0c9e3b",
+  "commandLine": {
+    "original": "git add ."
+  },
+  "language": "pwsh",
+  "autoApproveInfo": {
+    "value": "Automatycznie zatwierdzane dla tej sesji ([Wyłącz](command:workbench.action.terminal.chat.disableSessionAutoApproval?%255B%252252c09367-3f08-41ef-845e-2ffe51e730e7%2522%255D))",
+    "isTrusted": {
+      "enabledCommands": [
+        "workbench.action.terminal.chat.disableSessionAutoApproval"
+      ]
+    },
+    "supportThemeIcons": false,
+    "supportHtml": false,
+    "supportAlertSyntax": false
+  },
+  "terminalCommandState": {
+    "exitCode": 0,
+    "timestamp": 1766577175235,
+    "duration": 275
+  },
+  "terminalCommandUri": {
+    "$mid": 1,
+    "path": "/52ad19111077e68b98716b37f7d9f44d/33",
+    "scheme": "vscode-terminal",
+    "query": "command=tool-264ea64d-3324-48fe-b74c-51f9ee0c9e3b"
+  },
+  "terminalTheme": {
+    "background": "#181818",
+    "foreground": "#cccccc"
+  }
+}
+```
+Additional data:
+
+```json
+{
+  "vscodeToolId": "run_in_terminal",
+  "isHidden": false
+}
+```
+Result:
+
+```json
+{
+  "invocationMessage": "Korzystanie z \"Uruchom w terminalu\"",
+  "isConfirmed": {
+    "type": 1
+  },
+  "content": "",
+  "textEditContent": "",
+  "toolCallResult": null
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="run_in_terminal">
+<details>
+<summary>Tool use: **run_in_terminal**</summary>
+
+
+Parameters:
+
+```json
+{
+  "kind": "terminal",
+  "terminalToolSessionId": "c27e20a0-b3f5-4da7-8867-560fdbaa5151",
+  "terminalCommandId": "tool-4309442a-636e-45a5-bdc7-0bf51f43021f",
+  "commandLine": {
+    "original": "git commit -m \"docs: Add comprehensive UX enhancement roadmap for post-migration phases\n\n- Add Phase 2.1-2.4 roadmap with 10 practical UX improvements\n- Implement session persistence, change comparison, global undo system\n- Add contextual statistics, manual tagging, configurable table views\n- Include mobile card view, advanced export, file preview features\n- Update all migration documents with detailed implementation plans\n- Add checklists and success metrics for enhancement phases\""
+  },
+  "language": "pwsh",
+  "autoApproveInfo": {
+    "value": "Automatycznie zatwierdzane dla tej sesji ([Wyłącz](command:workbench.action.terminal.chat.disableSessionAutoApproval?%255B%252252c09367-3f08-41ef-845e-2ffe51e730e7%2522%255D))",
+    "isTrusted": {
+      "enabledCommands": [
+        "workbench.action.terminal.chat.disableSessionAutoApproval"
+      ]
+    },
+    "supportThemeIcons": false,
+    "supportHtml": false,
+    "supportAlertSyntax": false
+  },
+  "terminalCommandState": {
+    "exitCode": 0,
+    "timestamp": 1766577178127,
+    "duration": 271
+  },
+  "terminalCommandUri": {
+    "$mid": 1,
+    "path": "/52ad19111077e68b98716b37f7d9f44d/33",
+    "scheme": "vscode-terminal",
+    "query": "command=tool-4309442a-636e-45a5-bdc7-0bf51f43021f"
+  },
+  "terminalCommandOutput": {
+    "text": "&gt;&gt; \u001b[36m- Add checklists and success metrics for enhancement phases\"     \r\n\u001b[0m[main 670632a] docs: Add comprehensive UX enhancement roadmap for post-migration phases\r\n 7 files changed, 4120 insertions(+), 68 deletions(-)\r\n create mode 100644 etap.txt",
+    "lineCount": 5
+  },
+  "terminalTheme": {
+    "background": "#181818",
+    "foreground": "#cccccc"
+  }
+}
+```
+Additional data:
+
+```json
+{
+  "vscodeToolId": "run_in_terminal",
+  "isHidden": false
+}
+```
+Result:
+
+```json
+{
+  "invocationMessage": "Korzystanie z \"Uruchom w terminalu\"",
+  "isConfirmed": {
+    "type": 1
+  },
+  "content": "",
+  "textEditContent": "",
+  "toolCallResult": null
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+## ✅ **Dokumentacja zaktualizowana o 10 praktycznych ulepszeń UX!**
+
+Zaktualizowałem wszystkie dokumenty migracyjne o Twoje świetne pomysły, organizując je w **logiczną kolejność implementacji**:
+
+### **📋 Zaktualizowane pliki:**
+
+1. **`architecture-schema.md`** - Roadmap faz 2.1-2.4 z priorytetami
+2. **`implementation-plan.md`** - Szczegółowe kody dla wszystkich 10 pomysłów  
+3. **`migration-checklist.md`** - Checklist fazy 2.1+ z testowaniem
+4. **`migration-summary.md`** - Podsumowanie roadmapy ulepszeń
+
+### **🚀 Kolejność implementacji (Twoja rekomendacja):**
+
+**Faza 2.1 - Natychmiast po migracji:**
+- ✅ **Persistencia sesji** - auto-zapis co 30s, odzyskiwanie po awarii
+- ✅ **Tryb porównania** - podświetlanie zmian vs oryginały  
+- ✅ **Global undo** - 50-akcji stack z przyciskiem cofnij
+
+**Faza 2.2 - Kolejna iteracja:**
+- ✅ **Statystyki kontekstowe** - liczniki błędów, wykresy wieków
+- ✅ **System tagów** - ręczne tagowanie z kolorami i filtrami
+- ✅ **Konfigurowalny widok** - wybór kolumn, drag&drop kolejności
+
+**Faza 2.3 - Zaawansowane funkcje:**
+- ✅ **Tryb karta na mobile** - automatyczne karty na <768px
+- ✅ **Zaawansowany eksport** - opcje formatów, tylko zmodyfikowane
+- ✅ **Podgląd pliku** - przed wczytaniem z detekcją delimitera
+- ✅ **Bulk tagging** - "oznacz wszystkie czerwone"
+
+### **💡 Szczegóły implementacji:**
+
+Każdy pomysł ma **kompletny kod JavaScript** gotowy do wklejenia, włącznie z:
+- Strukturami danych w `appState`
+- Funkcjami obsługi zdarzeń  
+- UI komponentami (modals, buttons, charts)
+- Logiką biznesową
+- Przykładami użycia
+
+### **🎯 Priorytety (jak sugerowałeś):**
+
+1. **Najpierw bezpieczeństwo danych** - persistencja sesji
+2. **Potem jakość pracy** - porównanie zmian, undo  
+3. **Następnie organizacja** - statystyki, tagi, konfiguracja
+4. **Na koniec wygoda** - mobile, eksport, podgląd
+
+Te ulepszenia idealnie pasują do **frontend-centralnej architektury** - wszystko operuje na `appState`, bez dodatkowych requestów do backendu. Aplikacja zyska **profesjonalny sznyt** i będzie znacznie bardziej użyteczna dla genealogów!
+
+**Gotowy do rozpoczęcia implementacji fazy 1 migracji?** 🚀
+
+---
+
+_**User (2025-12-24 11:53Z)**_
+
+Tak, obecny modal da się bardzo dobrze wykorzystać i przerobić – to jedna z najmocniejszych części Twojego kodu!
+Aktualny modal (edit-modal.html + edit-modal.css) jest już bardzo solidny: ma sticky oryginalny tekst, dobre pola dla chrztu (dziecko + rodzice), hinty z oryginalnych danych, responsywność i ładny design. W nowej architekturze (Scenariusz 2) nie tylko go nie wyrzucamy – wręcz przeciwnie, staje się centralnym elementem edycji szczegółowej.
+Oto jak najlepiej go przerobić i zintegrować, zachowując maksimum istniejącego kodu:
+Co zostaje bez zmian lub z minimalnymi poprawkami
+
+Cała struktura HTML (sekcje: oryginalny tekst sticky, metadata górny pasek, dziecko, rodzice, uwagi).
+Większość CSS – jest już bardzo dobra (zmienne, kontrasty, responsywność).
+Logika otwierania/zamykania modala (openEditModal, closeEditModal).
+Sticky oryginalny tekst (ORYGINALNY TEKST TSV) – super funkcja, zostaje 100%.
+
+Co warto dodać/przerobić (zmiany ergonomiczne i funkcjonalne)
+
+Dynamiczne dostosowanie do typu rekordu
+Dodaj na górze select recordType (Chrzest / Zgon / Małżeństwo) – jak proponowałem wcześniej.
+Na podstawie wartości ukrywaj/pokazuj sekcje:
+Chrzest: dziecko + rodzice + chrzestni (możesz dodać sekcję chrzestnych).
+Zgon: zmarły (imię, nazwisko, wiek, data zgonu/pogrzebu, przyczyna).
+Małżeństwo: pan młody + panna młoda + świadkowie + data ślubu.
+
+Implementacja: prosta funkcja JS toggleModalSections(type) wywoływana na zmianę selecta i przy otwarciu modala.
+
+Wczytywanie danych z appState.records
+Przy otwarciu modala (openEditModal(recordId)):
+Pobierz rekord z appState.records.
+Wypełnij wszystkie pola input/select/textarea.
+Ustaw select recordType na rekord.recordType.
+Wywołaj toggleModalSections().
+
+
+Zapis bezpośrednio do appState
+Przy submit modala:
+Zbierz wszystkie wartości z pól.
+Wywołaj updateRecord(recordId, field, value) dla każdego zmienionego pola LUB zaktualizuj cały rekord naraz.
+Opcjonalnie: wyślij zmienione pola do /api/validate-field dla odświeżenia walidacji.
+Zamknij modal i wywołaj renderTable() (lub tylko przerenderuj wiersz).
+
+
+Dodatkowe pola bez psucia layoutu
+Dla chrztu: dodaj sekcję chrzestni (2–4 pola: imię/nazwisko ojca i matki chrzestnej).
+Dla zgonu/małżeństwa: reutilizuj istniejącą strukturę „parents-row” – po prostu zmień nagłówki (np. „Zmarły” zamiast „Dziecko”, „Pan młody” / „Panna młoda” zamiast „Ojciec” / „Matka”).
+Dla wszystkich: dodaj pola dat (urodzenia, chrztu, zgonu, ślubu) – type="date".
+
+Lepsza ergonomia
+Etykiety nad polami (już masz częściowo – dokończ).
+Autofocus na pierwszym polu po otwarciu.
+Przycisk „Zapisz i następny” / „Zapisz i poprzedni” – otwiera modal dla kolejnego/poprzedniego rekordu.
+Podświetlanie pól z invalid walidacją (na podstawie record.validation).
+
+Opcjonalne ulepszenia
+Zakładki w modalu (np. „Podstawowe”, „Rodzice/Świadkowie”, „Dodatkowe”, „Uwagi”) – jeśli będzie dużo pól.
+Podpowiedzi/sugestie z backendu w polach (np. autocomplete dla imion/nazwisk z bazy).
+Przycisk „Przywróć oryginalne” – reset pól do wartości z originalText.
+
+
+Podsumowanie: ile pracy?
+
+80–90% obecnego modala zostaje nietknięte.
+Główna praca to:
+Dodanie selecta typu rekordu i funkcji togglingu sekcji (JS + CSS .hidden).
+Przerobienie wypełniania/zapisu na appState zamiast starego allData.
+Dodanie 2–3 nowych sekcji HTML (zgony, małżeństwa, chrzestni) – reutilizacja istniejących klas CSS.
+
+Szacowany czas: 1–2 dni robocze.
+
+Werdykt:
+Obecny modal jest na tyle dobry, że nie tylko da się go użyć – powinien stać się głównym narzędziem edycji szczegółowej w nowej wersji. Po małych przeróbkach będzie obsługiwał wszystkie trzy typy rekordów, będzie szybszy (brak round-trip do backendu przy zapisie) i bardziej ergonomiczny.
+
+---
+
+_**Agent (model copilot/grok-code-fast-1)**_
+
+<tool-use data-tool-type="read" data-tool-name="copilot_readFile">
+<details>
+<summary>Tool use: **copilot_readFile** • Czytanie [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/edit-modal.html#1-1), wiersze 1 do 100</summary>
+
+
+Odczytaj [](file:///j%3A/A.Gene/modules/data-entry/parent-validator/edit-modal.html#1-1), wiersze 1 do 100
 
 </details>
 </tool-use>

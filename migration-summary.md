@@ -91,6 +91,7 @@
 - **Session Persistence:** Auto-save to localStorage every 30s, recovery dialog on startup
 - **Change Comparison:** Keep originalRecords[], highlight modified fields
 - **Global Undo:** 50-action stack with toolbar button for peace of mind
+- **Modal Integration:** Update existing modal to work with appState instead of allData
 
 ### **Faza 2.2 - Data Management & Analytics**
 - **Contextual Statistics:** Red fields counter, age distribution charts, common surnames
