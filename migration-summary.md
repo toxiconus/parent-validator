@@ -9,13 +9,13 @@
 
 ## 📚 **CREATED DOCUMENTS**
 
-### **1. Migration Analysis** (`migration-plan-v2.md`)
+### **1. Migration Analysis** (`migration-plan.md`)
 - Complete analysis of current vs. target architecture
 - Detailed problem identification
 - Benefits and risks assessment
 - 4-week implementation timeline
 
-### **2. Architecture Schema** (`architecture-schema.md`)
+### **2. Architecture Overview** (`architecture-overview.md`)
 - Visual architecture diagrams
 - Data flow specifications
 - API endpoint definitions
@@ -206,7 +206,7 @@ feat: Start migration to frontend-state architecture
 
 - Begin Phase 1: Infrastructure preparation
 - Add central appState management
-- See migration-plan-v2.md for full roadmap
+- See migration-plan.md for full roadmap
 ```
 
 **Let's build the next generation of Parent Validator!** 🎉

@@ -70,7 +70,7 @@ WYJŚCIE:
 
 ## 📖 Pełna Dokumentacja
 
-➡️ **[DOKUMENTACJA.md](DOKUMENTACJA.md)** - Kompletny przewodnik  
+➡️ **[technical-docs.md](technical-docs.md)** - Kompletny przewodnik  
   (architektura, format danych, edycja, troubleshooting)
 
 ---
